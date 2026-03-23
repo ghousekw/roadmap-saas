@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pathfinder — AI Roadmap Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --surface: #141417;
+      --surface2: #1c1c21;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.13);
+      --text: #f0ede8;
+      --muted: #7a7880;
+      --accent: #c8f060;
+      --accent-dim: rgba(200,240,96,0.12);
+      --red: #ff5f5f;
+      --phase-1: #c8f060;
+      --phase-2: #60d4f0;
+      --phase-3: #f0a060;
+      --phase-4: #b060f0;
+      --serif: 'DM Serif Display', serif;
+      --sans: 'Instrument Sans', sans-serif;
+      --mono: 'DM Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* NOISE OVERLAY */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(13,13,15,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-family: var(--serif); font-size: 1.25rem; color: var(--text); letter-spacing: -0.01em; }
+    .logo span { color: var(--accent); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all .15s; border: 1px solid var(--border2); background: transparent; color: var(--muted); }
+    .btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: var(--surface2); }
+    .btn-accent { background: var(--accent); color: #0d0d0f; border-color: transparent; }
+    .btn-accent:hover { background: #d4f570; color: #0d0d0f; }
+    #user-email { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 6rem 2rem 4rem;
+      position: relative;
+    }
+    .hero-glow {
+      position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 300px;
+      background: radial-gradient(ellipse, rgba(200,240,96,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 11px; color: var(--accent);
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border: 1px solid rgba(200,240,96,0.25); border-radius: 100px;
+      padding: 4px 14px; margin-bottom: 2rem;
+      animation: fadeUp .6s ease both;
+    }
+    .eyebrow::before { content: '●'; font-size: 8px; }
+    h1 {
+      font-family: var(--serif); font-size: clamp(2.8rem, 6vw, 5rem);
+      line-height: 1.05; letter-spacing: -0.02em;
+      color: var(--text); margin-bottom: 1.25rem;
+      animation: fadeUp .6s .1s ease both;
+    }
+    h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub {
+      font-size: 1.05rem; color: var(--muted); max-width: 480px;
+      margin-bottom: 3rem; line-height: 1.7;
+      animation: fadeUp .6s .2s ease both;
+    }
+
+    /* INPUT AREA */
+    .input-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 1.5rem;
+      width: 100%; max-width: 640px;
+      animation: fadeUp .6s .3s ease both;
+    }
+    .input-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .input-field {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 15px; color: var(--text); font-family: var(--sans);
+      outline: none; transition: border-color .15s;
+    }
+    .input-field::placeholder { color: var(--muted); }
+    .input-field:focus { border-color: rgba(200,240,96,0.4); }
+    .model-select {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 12px 14px;
+      font-size: 13px; color: var(--muted); font-family: var(--mono);
+      outline: none; cursor: pointer;
+    }
+    .model-select:focus { border-color: rgba(200,240,96,0.4); }
+    .model-select option { background: var(--surface2); }
+    .generate-btn {
+      width: 100%; padding: 13px; border-radius: 10px;
+      background: var(--accent); color: #0d0d0f;
+      border: none; font-size: 15px; font-weight: 600;
+      font-family: var(--sans); cursor: pointer;
+      transition: all .15s; letter-spacing: -0.01em;
+    }
+    .generate-btn:hover { background: #d4f570; transform: translateY(-1px); }
+    .generate-btn:active { transform: translateY(0); }
+    .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ERROR */
+    .error-bar {
+      display: none; background: rgba(255,95,95,0.1); border: 1px solid rgba(255,95,95,0.25);
+      border-radius: 8px; padding: 10px 14px; margin-top: 12px;
+      font-size: 13px; color: var(--red);
+    }
+
+    /* LOADING */
+    .loading {
+      display: none; text-align: center; padding: 3rem;
+      color: var(--muted); font-family: var(--mono); font-size: 13px;
+    }
+    .loading-dots { display: inline-flex; gap: 6px; margin-top: 12px; }
+    .loading-dots span {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+      animation: pulse 1.2s ease infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: .2s; }
+    .loading-dots span:nth-child(3) { animation-delay: .4s; }
+
+    /* ROADMAP OUTPUT */
+    #output-section { display: none; padding: 4rem 2rem; max-width: 860px; margin: 0 auto; }
+    .output-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 2.5rem; flex-wrap: wrap; gap: 1rem;
+    }
+    .output-topic { font-family: var(--serif); font-size: 2rem; line-height: 1.15; }
+    .output-topic span { color: var(--accent); }
+    .output-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* PHASES */
+    .phases { display: flex; flex-direction: column; gap: 24px; }
+    .phase-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      transition: border-color .2s;
+    }
+    .phase-card:hover { border-color: var(--border2); }
+    .phase-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      flex-shrink: 0;
+    }
+    .phase-meta { flex: 1; }
+    .phase-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .phase-duration {
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      margin-top: 2px;
+    }
+    .phase-progress {
+      font-family: var(--mono); font-size: 11px; padding: 3px 10px;
+      border-radius: 100px; border: 1px solid;
+    }
+    .phase-body { padding: 1.25rem 1.5rem; }
+    .phase-desc { font-size: 14px; color: var(--muted); margin-bottom: 1rem; line-height: 1.7; }
+    .tasks { display: flex; flex-direction: column; gap: 8px; }
+    .task {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 14px; color: var(--text); line-height: 1.5;
+    }
+    .task-bullet {
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 1px solid var(--border2); flex-shrink: 0;
+      margin-top: 2px; display: flex; align-items: center; justify-content: center;
+    }
+    .task-bullet::after { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+    .milestone {
+      margin-top: 1rem; padding: 10px 14px;
+      background: var(--surface2); border-radius: 8px;
+      font-size: 13px; color: var(--muted);
+      border-left: 2px solid;
+    }
+    .milestone strong { color: var(--text); font-weight: 500; }
+
+    /* PHASE COLORS */
+    .p1 .phase-num { background: rgba(200,240,96,0.12); color: var(--phase-1); }
+    .p1 .phase-progress { color: var(--phase-1); border-color: rgba(200,240,96,0.25); background: rgba(200,240,96,0.08); }
+    .p1 .task-bullet::after { background: var(--phase-1); }
+    .p1 .milestone { border-color: var(--phase-1); }
+
+    .p2 .phase-num { background: rgba(96,212,240,0.12); color: var(--phase-2); }
+    .p2 .phase-progress { color: var(--phase-2); border-color: rgba(96,212,240,0.25); background: rgba(96,212,240,0.08); }
+    .p2 .task-bullet::after { background: var(--phase-2); }
+    .p2 .milestone { border-color: var(--phase-2); }
+
+    .p3 .phase-num { background: rgba(240,160,96,0.12); color: var(--phase-3); }
+    .p3 .phase-progress { color: var(--phase-3); border-color: rgba(240,160,96,0.25); background: rgba(240,160,96,0.08); }
+    .p3 .task-bullet::after { background: var(--phase-3); }
+    .p3 .milestone { border-color: var(--phase-3); }
+
+    .p4 .phase-num { background: rgba(176,96,240,0.12); color: var(--phase-4); }
+    .p4 .phase-progress { color: var(--phase-4); border-color: rgba(176,96,240,0.25); background: rgba(176,96,240,0.08); }
+    .p4 .task-bullet::after { background: var(--phase-4); }
+    .p4 .milestone { border-color: var(--phase-4); }
+
+    /* HISTORY SIDEBAR */
+    #history-section { display: none; padding: 2rem; max-width: 860px; margin: 0 auto; }
+    .history-title { font-family: var(--serif); font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .history-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1rem 1.25rem; cursor: pointer;
+      transition: all .15s;
+    }
+    .history-item:hover { border-color: var(--border2); background: var(--surface2); }
+    .history-topic { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .history-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .history-share { font-size: 12px; color: var(--accent); text-decoration: none; margin-top: 8px; display: block; }
+
+    /* SHARE TOAST */
+    .toast {
+      position: fixed; bottom: 2rem; right: 2rem; z-index: 200;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 12px 16px; font-size: 13px;
+      color: var(--text); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transform: translateY(20px); opacity: 0;
+      transition: all .25s; pointer-events: none;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ANIMATIONS */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 600px) {
+      nav { padding: 1rem; }
+      .input-row { flex-direction: column; }
+      .output-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Path<span>finder</span></div>
+  <div class="nav-right">
+    <span id="user-email"></span>
+    <button class="btn" id="auth-btn" onclick="handleAuth()">Sign in</button>
+    <button class="btn" onclick="toggleHistory()">History</button>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="eyebrow">AI-Powered Learning Roadmaps</div>
+    <h1>Master anything with<br>an <em>intelligent</em> roadmap</h1>
+    <p class="hero-sub">Enter any skill, topic, or goal. Get a structured, phase-by-phase learning path built by AI — ready to export and share.</p>
+
+    <div class="input-card">
+      <div class="input-row">
+        <input class="input-field" id="topic" placeholder="e.g. Learn Rust, Build a SaaS, Get into ML..." autocomplete="off"/>
+        <select class="model-select" id="model">
+          <option value="claude">Claude</option>
+          <option value="openai">GPT-4o</option>
+        </select>
+      </div>
+      <button class="generate-btn" id="gen-btn" onclick="generate()">Generate Roadmap →</button>
+      <div class="error-bar" id="error-bar"></div>
+    </div>
+  </section>
+
+  <div class="loading" id="loading">
+    <div>Building your roadmap...</div>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <section id="output-section">
+    <div class="output-header">
+      <div>
+        <div style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">YOUR ROADMAP</div>
+        <div class="output-topic" id="output-topic"></div>
+      </div>
+      <div class="output-actions">
+        <button class="btn" onclick="copyShareLink()">Share ↗</button>
+        <button class="btn" onclick="downloadPDF()">Export PDF</button>
+      </div>
+    </div>
+    <div class="phases" id="phases-container"></div>
+  </section>
+
+  <section id="history-section">
+    <div class="history-title">Your Roadmaps</div>
+    <div class="history-grid" id="history-grid"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
