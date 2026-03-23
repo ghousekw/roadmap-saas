@@ -28,8 +28,8 @@ async function handleRequest(request, env, context) {
     if (prompt.length > 300) {
       return json({ error: "Prompt must be under 300 characters" }, 400, corsHeaders);
     }
-    if (!["claude", "openai", "nvidia"].includes(model)) {
-      return json({ error: "Invalid model" }, 400, corsHeaders);
+    if (model !== "nvidia") {
+      return json({ error: "Only nvidia model is supported" }, 400, corsHeaders);
     }
 
     // ── Cache check (FIXED: uses hashed key, not raw prompt in URL) ──────────
@@ -71,50 +71,19 @@ Rules:
 - Milestones should be demonstrable achievements`;
 
     // ── Build request per model ──────────────────────────────────────────────
-    let url, headers, reqBody;
-
-    if (model === "claude") {
-      url = "https://api.anthropic.com/v1/messages";
-      headers = {
-        "Content-Type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      };
-      reqBody = {
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [{ role: "user", content: `Create a roadmap for: ${prompt}` }],
-      };
-    } else if (model === "openai") {
-      url = "https://api.openai.com/v1/chat/completions";
-      headers = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-      };
-      reqBody = {
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Create a roadmap for: ${prompt}` },
-        ],
-        response_format: { type: "json_object" },
-      };
-    } else if (model === "nvidia") {
-      url = "https://integrate.api.nvidia.com/v1/chat/completions";
-      headers = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.NVIDIA_API_KEY}`,
-      };
-      reqBody = {
-        model: "meta/llama-3.1-405b-instruct",
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Create a roadmap for: ${prompt}` },
-        ],
-      };
-    }
+    const url = "https://integrate.api.nvidia.com/v1/chat/completions";
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${env.NVIDIA_API_KEY}`,
+    };
+    const reqBody = {
+      model: "meta/llama-3.1-405b-instruct",
+      max_tokens: 2000,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Create a roadmap for: ${prompt}` },
+      ],
+    };
 
     // ── Fetch with retry + exponential backoff ───────────────────────────────
     const apiRes = await retryFetch(url, headers, reqBody);
