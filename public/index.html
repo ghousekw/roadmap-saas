@@ -52,6 +52,7 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 1rem 2rem;
       background: rgba(13,13,15,0.85);
+      -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
     }
@@ -273,6 +274,13 @@
       40% { transform: scale(1); opacity: 1; }
     }
 
+    .output-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      margin-bottom: 8px;
+    }
+
     /* RESPONSIVE */
     @media (max-width: 600px) {
       nav { padding: 1rem; }
@@ -302,7 +310,7 @@
     <div class="input-card">
       <div class="input-row">
         <input class="input-field" id="topic" placeholder="e.g. Learn Rust, Build a SaaS, Get into ML..." autocomplete="off"/>
-        <select class="model-select" id="model">
+        <select class="model-select" id="model" aria-label="Select AI model">
           <option value="claude">Claude</option>
           <option value="openai">GPT-4o</option>
         </select>
@@ -320,7 +328,7 @@
   <section id="output-section">
     <div class="output-header">
       <div>
-        <div style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">YOUR ROADMAP</div>
+        <div class="output-label">YOUR ROADMAP</div>
         <div class="output-topic" id="output-topic"></div>
       </div>
       <div class="output-actions">

@@ -1,8 +1,8 @@
 // ─── Supabase init (FIXED: was supabase.createClient which doesn't exist) ────
 const { createClient } = supabase;
 const db = createClient(
-  "YOUR_SUPABASE_URL",
-  "YOUR_SUPABASE_ANON_KEY"
+  "https://npqevqiwmsibqswtjjpc.supabase.co",
+  "sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR"
 );
 
 // ─── State ────────────────────────────────────────────────────────────────────
