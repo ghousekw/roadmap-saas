@@ -3,7 +3,8 @@ compatibility_date = "2026-03-23"
 main = "functions/generate.js"
 
 [env.production]
-vars = { NVIDIA_API_KEY = "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", SUPABASE_URL = "https://npqevqiwmsibqswtjjpc.supabase.co", SUPABASE_KEY = "sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR" }
+vars = { SUPABASE_URL = "https://npqevqiwmsibqswtjjpc.supabase.co", SUPABASE_KEY = "sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR" }
+# Set NVIDIA_API_KEY in Cloudflare dashboard or use: export NVIDIA_API_KEY=your_key
 
 [assets]
 directory = "./public"
