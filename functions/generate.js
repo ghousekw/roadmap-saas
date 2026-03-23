@@ -18,6 +18,11 @@ async function handleRequest(request, env, context) {
   }
 
   try {
+    // Check if API key exists
+    if (!env.NVIDIA_API_KEY) {
+      return json({ error: "NVIDIA_API_KEY not configured" }, 500, corsHeaders);
+    }
+
     const body = await request.json();
     const { prompt, model } = body;
 
