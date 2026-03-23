@@ -82,7 +82,7 @@ Rules:
       "Authorization": `Bearer ${env.NVIDIA_API_KEY}`,
     };
     const reqBody = {
-      model: "meta/llama-3.1-405b-instruct",
+      model: "qwen/qwen3.5-122b-a10b",
       max_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },
