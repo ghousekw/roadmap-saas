@@ -1,0 +1,6 @@
+name = "pathfinder-static"
+compatibility_date = "2026-03-23"
+main = "functions/generate.js"
+
+[assets]
+directory = "./public"

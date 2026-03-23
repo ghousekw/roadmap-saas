@@ -64,12 +64,13 @@ async function generate() {
 
     const data = await res.json();
 
-    // Extract the roadmap JSON from the Claude/OpenAI response
+    // Extract the roadmap JSON from the Claude/OpenAI/Nvidia response
     let roadmap;
     if (model === "claude") {
       const text = data.content?.[0]?.text ?? "";
       roadmap = parseRoadmap(text);
     } else {
+      // OpenAI and Nvidia use same format
       const text = data.choices?.[0]?.message?.content ?? "";
       roadmap = parseRoadmap(text);
     }

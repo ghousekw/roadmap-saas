@@ -1,5 +1,10 @@
-export async function onRequestPost(context) {
-  const { request, env } = context;
+export default {
+  async fetch(request, env, ctx) {
+    return handleRequest(request, env, ctx);
+  }
+};
+
+async function handleRequest(request, env, context) {
 
   // ── CORS headers ────────────────────────────────────────────────────────────
   const corsHeaders = {
@@ -23,7 +28,7 @@ export async function onRequestPost(context) {
     if (prompt.length > 300) {
       return json({ error: "Prompt must be under 300 characters" }, 400, corsHeaders);
     }
-    if (!["claude", "openai"].includes(model)) {
+    if (!["claude", "openai", "nvidia"].includes(model)) {
       return json({ error: "Invalid model" }, 400, corsHeaders);
     }
 
@@ -76,12 +81,12 @@ Rules:
         "anthropic-version": "2023-06-01",
       };
       reqBody = {
-        model: "claude-sonnet-4-20250514", // FIXED: was claude-3-sonnet-20240229
+        model: "claude-sonnet-4-20250514",
         max_tokens: 2000,
         system: systemPrompt,
         messages: [{ role: "user", content: `Create a roadmap for: ${prompt}` }],
       };
-    } else {
+    } else if (model === "openai") {
       url = "https://api.openai.com/v1/chat/completions";
       headers = {
         "Content-Type": "application/json",
@@ -94,6 +99,20 @@ Rules:
           { role: "user", content: `Create a roadmap for: ${prompt}` },
         ],
         response_format: { type: "json_object" },
+      };
+    } else if (model === "nvidia") {
+      url = "https://integrate.api.nvidia.com/v1/chat/completions";
+      headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${env.NVIDIA_API_KEY}`,
+      };
+      reqBody = {
+        model: "meta/llama-3.1-405b-instruct",
+        max_tokens: 2000,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Create a roadmap for: ${prompt}` },
+        ],
       };
     }
 
