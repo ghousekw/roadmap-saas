@@ -2,5 +2,8 @@ name = "pathfinder-static"
 compatibility_date = "2026-03-23"
 main = "functions/generate.js"
 
+[env.production]
+vars = { NVIDIA_API_KEY = "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" }
+
 [assets]
 directory = "./public"
