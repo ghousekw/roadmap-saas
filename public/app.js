@@ -40,7 +40,7 @@ async function handleAuth() {
 // ─── Generate ─────────────────────────────────────────────────────────────────
 async function generate() {
   const topic = document.getElementById("topic").value.trim();
-  const model = document.getElementById("model").value;
+  const model = "nvidia"; // Using Nvidia Llama only
 
   if (!topic) return showError("Please enter a topic first.");
   if (topic.length > 300) return showError("Topic must be under 300 characters.");
