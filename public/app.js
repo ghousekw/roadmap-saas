@@ -115,6 +115,26 @@ function parseRoadmap(text) {
   }
 }
 
+function generateTaskTip(task, phase) {
+  const milestone = phase.milestone || "the phase milestone";
+  const verbs = ["Focus on", "Practice", "Master", "Understand", "Build", "Explore"];
+  const verb = verbs[Math.floor(Math.random() * verbs.length)];
+  return `${verb} "${task.slice(0, 50)}${task.length>50?'...':''}" to achieve ${milestone}.`;
+}
+
+function updateOverallProgress() {
+  const container = document.getElementById("phases-container");
+  if (!container) return;
+  const checkboxes = container.querySelectorAll(".task-check");
+  const total = checkboxes.length;
+  const completed = container.querySelectorAll(".task-check:checked").length;
+  const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+  const bar = document.getElementById("overall-progress-bar");
+  const percentEl = document.getElementById("overall-progress-percent");
+  if (bar) bar.style.width = percent + "%";
+  if (percentEl) percentEl.textContent = percent + "%";
+}
+
 function renderRoadmap(topic, roadmap) {
   const colors = ["p1", "p2", "p3", "p4"];
   const labels = ["Foundation", "Building", "Advanced", "Mastery"];
@@ -122,47 +142,380 @@ function renderRoadmap(topic, roadmap) {
   const container = document.getElementById("phases-container");
   const topicEl = document.getElementById("output-topic");
 
-  topicEl.innerHTML = `Roadmap: <span>${escHtml(topic)}</span>`;
+  // Safe DOM update
+  topicEl.textContent = "";
+  topicEl.appendChild(document.createTextNode("Roadmap: "));
+  const span = document.createElement("span");
+  span.textContent = topic;
+  topicEl.appendChild(span);
+
   container.innerHTML = "";
 
   const phases = roadmap.phases || [];
-  phases.forEach((phase, i) => {
-    const colorClass = colors[i % colors.length];
-    const label = labels[i % labels.length];
-    const tasks = (phase.tasks || []).map(t =>
-      `<div class="task">
-        <div class="task-bullet"></div>
-        <span>${escHtml(t)}</span>
-      </div>`
-    ).join("");
+  phases.forEach((phase, phaseIdx) => {
+    const colorClass = colors[phaseIdx % colors.length];
+    const label = labels[phaseIdx % labels.length];
 
+    // Create phase card
     const card = document.createElement("div");
     card.className = `phase-card ${colorClass}`;
-    card.innerHTML = `
-      <div class="phase-header">
-        <div class="phase-num">${String(i + 1).padStart(2, "0")}</div>
-        <div class="phase-meta">
-          <div class="phase-title">${escHtml(phase.title || `Phase ${i + 1}`)}</div>
-          <div class="phase-duration">${escHtml(phase.duration || "")}</div>
-        </div>
-        <div class="phase-progress">${escHtml(label)}</div>
-      </div>
-      <div class="phase-body">
-        ${phase.description ? `<div class="phase-desc">${escHtml(phase.description)}</div>` : ""}
-        <div class="tasks">${tasks}</div>
-        ${phase.milestone ? `<div class="milestone"><strong>Milestone:</strong> ${escHtml(phase.milestone)}</div>` : ""}
-      </div>
-    `;
+    card.dataset.phaseIndex = phaseIdx;
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "phase-header";
+
+    const phaseNum = document.createElement("div");
+    phaseNum.className = "phase-num";
+    phaseNum.textContent = String(phaseIdx + 1).padStart(2, "0");
+    header.appendChild(phaseNum);
+
+    const meta = document.createElement("div");
+    meta.className = "phase-meta";
+    const title = document.createElement("div");
+    title.className = "phase-title";
+    title.textContent = phase.title || `Phase ${phaseIdx + 1}`;
+    meta.appendChild(title);
+    if (phase.duration) {
+      const dur = document.createElement("div");
+      dur.className = "phase-duration";
+      dur.textContent = phase.duration;
+      meta.appendChild(dur);
+    }
+    header.appendChild(meta);
+
+    const progress = document.createElement("div");
+    progress.className = "phase-progress";
+    progress.textContent = label;
+    header.appendChild(progress);
+
+    card.appendChild(header);
+
+    // Body
+    const body = document.createElement("div");
+    body.className = "phase-body";
+
+    if (phase.description) {
+      const desc = document.createElement("div");
+      desc.className = "phase-desc";
+      desc.textContent = phase.description;
+      body.appendChild(desc);
+    }
+
+    // Tasks
+    const tasksContainer = document.createElement("div");
+    tasksContainer.className = "tasks";
+
+    (phase.tasks || []).forEach((task, taskIdx) => {
+      const taskEl = document.createElement("div");
+      taskEl.className = "task";
+      taskEl.dataset.phase = phaseIdx;
+      taskEl.dataset.task = taskIdx;
+
+      // Checkbox
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "task-check";
+      taskEl.appendChild(checkbox);
+
+      // Drag handle
+      const handle = document.createElement("span");
+      handle.className = "task-handle";
+      handle.title = "Drag to reorder";
+      handle.textContent = "⋮⋮";
+      taskEl.appendChild(handle);
+
+      // Task text
+      const taskText = document.createElement("span");
+      taskText.className = "task-text";
+      taskText.contentEditable = "false";
+      taskText.textContent = task;
+      taskEl.appendChild(taskText);
+
+      // Actions
+      const actions = document.createElement("div");
+      actions.className = "task-actions";
+
+      // Edit button
+      const editBtn = document.createElement("button");
+      editBtn.className = "task-btn task-edit-btn";
+      editBtn.title = "Edit task";
+      editBtn.textContent = "✏️";
+      actions.appendChild(editBtn);
+
+      // Copy button
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "task-btn task-copy-btn";
+      copyBtn.title = "Copy task";
+      copyBtn.textContent = "📋";
+      actions.appendChild(copyBtn);
+
+      // Tooltip toggle
+      const tooltipToggle = document.createElement("span");
+      tooltipToggle.className = "task-btn task-tooltip-toggle";
+      tooltipToggle.title = "Show tip";
+      tooltipToggle.textContent = "ⓘ";
+
+      // Tooltip
+      const tooltip = document.createElement("div");
+      tooltip.className = "task-tooltip";
+      tooltip.style.display = "none";
+      tooltip.textContent = "💡 " + generateTaskTip(task, phase);
+
+      actions.appendChild(tooltipToggle);
+      actions.appendChild(tooltip);
+      taskEl.appendChild(actions);
+
+      tasksContainer.appendChild(taskEl);
+    });
+
+    body.appendChild(tasksContainer);
+
+    if (phase.milestone) {
+      const milestone = document.createElement("div");
+      milestone.className = "milestone";
+      const strong = document.createElement("strong");
+      strong.textContent = "Milestone:";
+      milestone.appendChild(strong);
+      milestone.appendChild(document.createTextNode(" " + phase.milestone));
+      body.appendChild(milestone);
+    }
+
+    card.appendChild(body);
     container.appendChild(card);
   });
 
+  // Show overall progress
+  const progressContainer = document.getElementById("overall-progress-container");
+  if (progressContainer) {
+    progressContainer.style.display = "block";
+    updateOverallProgress();
+  }
+
   section.style.display = "block";
 
-  // Delay scroll to ensure DOM is rendered
   setTimeout(() => {
     section.scrollIntoView({ behavior: "smooth", block: "start" });
   }, 100);
 }
+
+function togglePhaseCollapsed(phaseCard) {
+  phaseCard.classList.toggle("collapsed");
+}
+
+function toggleTaskCompleted(taskEl) {
+  const checkbox = taskEl.querySelector(".task-check");
+  taskEl.classList.toggle("completed", checkbox.checked);
+  updateOverallProgress();
+}
+
+function enableTaskEdit(taskTextEl, phaseIdx, taskIdx) {
+  const currentText = taskTextEl.textContent;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentText;
+  input.className = "edit-input";
+  input.style.cssText = "width: 100%; font: inherit; padding: 4px; border: 1px solid var(--accent); border-radius: 4px; background: var(--surface2); color: var(--text); outline: none; box-sizing: border-box;";
+  taskTextEl.replaceWith(input);
+  input.focus();
+  input.select();
+  const saveEdit = () => {
+    const newText = input.value.trim() || currentText;
+    const newSpan = document.createElement("span");
+    newSpan.className = "task-text";
+    newSpan.contentEditable = "false";
+    newSpan.textContent = newText;
+    input.replaceWith(newSpan);
+    if (currentRoadmap && currentRoadmap.phases && currentRoadmap.phases[phaseIdx]) {
+      currentRoadmap.phases[phaseIdx].tasks[taskIdx] = newText;
+    }
+    showToast("Task updated");
+  };
+  input.addEventListener("blur", saveEdit);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === "Escape") {
+      input.value = currentText;
+      input.blur();
+    }
+  });
+}
+
+function copyTaskText(btn) {
+  const taskEl = btn.closest(".task");
+  const text = taskEl.querySelector(".task-text").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Task copied!");
+  }).catch(err => {
+    showToast("Failed to copy");
+    console.error(err);
+  });
+}
+
+function showTaskTooltip(toggleBtn) {
+  const tooltip = toggleBtn.closest(".task-actions").querySelector(".task-tooltip");
+  if (tooltip) {
+    const isVisible = tooltip.style.display === "block";
+    tooltip.style.display = isVisible ? "none" : "block";
+    if (!isVisible) {
+      setTimeout(() => {
+        tooltip.style.display = "none";
+      }, 3000);
+    }
+  }
+}
+
+function startTaskDrag(e) {
+  const taskEl = e.target.closest(".task");
+  if (!taskEl) return;
+  taskEl.classList.add("dragging");
+  e.dataTransfer.setData("text/plain", `${taskEl.dataset.phase}-${taskEl.dataset.task}`);
+  e.dataTransfer.effectAllowed = "move";
+  window.draggedTask = taskEl;
+}
+
+function handleTaskDrop(e) {
+  e.preventDefault();
+  const targetTask = e.target.closest(".task");
+  if (!targetTask || !window.draggedTask) return;
+  const dragged = window.draggedTask;
+  if (dragged === targetTask) return;
+  const fromPhase = parseInt(dragged.dataset.phase);
+  const fromTask = parseInt(dragged.dataset.task);
+  const toPhase = parseInt(targetTask.dataset.phase);
+  const toTask = parseInt(targetTask.dataset.task);
+  reorderTask(fromPhase, fromTask, toPhase, toTask);
+  dragged.classList.remove("dragging");
+  window.draggedTask = null;
+}
+
+function reorderTask(fromPhaseIdx, fromTaskIdx, toPhaseIdx, toTaskIdx) {
+  const container = document.getElementById("phases-container");
+  const draggedEl = container.querySelector(`.task[data-phase="${fromPhaseIdx}"][data-task="${fromTaskIdx}"]`);
+  const targetEl = container.querySelector(`.task[data-phase="${toPhaseIdx}"][data-task="${toTaskIdx}"]`);
+  if (!draggedEl || !targetEl) return;
+
+  // Determine insertion position: after if target is after or in later phase, else before
+  if (toTaskIdx > fromTaskIdx || toPhaseIdx > fromPhaseIdx) {
+    targetEl.after(draggedEl);
+  } else {
+    targetEl.before(draggedEl);
+  }
+
+  // Update data in currentRoadmap
+  if (currentRoadmap && currentRoadmap.phases) {
+    const fromPhase = currentRoadmap.phases[fromPhaseIdx];
+    const toPhase = currentRoadmap.phases[toPhaseIdx];
+    const [movedTask] = fromPhase.tasks.splice(fromTaskIdx, 1);
+    // Adjust target index if moving within same phase and target after original
+    let adjustedToTaskIdx = toTaskIdx;
+    if (fromPhaseIdx === toPhaseIdx && toTaskIdx > fromTaskIdx) {
+      adjustedToTaskIdx = toTaskIdx - 1;
+    }
+    toPhase.tasks.splice(adjustedToTaskIdx, 0, movedTask);
+    updateDataAttributes();
+    showToast("Task reordered");
+  }
+}
+
+function updateDataAttributes() {
+  const container = document.getElementById("phases-container");
+  const phaseCards = container.querySelectorAll(".phase-card");
+  phaseCards.forEach((card, phaseIdx) => {
+    card.dataset.phaseIndex = phaseIdx;
+    const tasks = card.querySelectorAll(".task");
+    tasks.forEach((task, taskIdx) => {
+      task.dataset.phase = phaseIdx;
+      task.dataset.task = taskIdx;
+    });
+  });
+}
+
+// Initialize event listeners
+(function initInteractions() {
+  const container = document.getElementById("phases-container");
+  if (!container) return;
+
+  // Phase collapse
+  container.addEventListener("click", e => {
+    const header = e.target.closest(".phase-header");
+    if (header) {
+      const card = header.closest(".phase-card");
+      if (card) card.classList.toggle("collapsed");
+    }
+  });
+
+  // Checkbox change
+  container.addEventListener("change", e => {
+    if (e.target.classList.contains("task-check")) {
+      const taskEl = e.target.closest(".task");
+      if (taskEl) toggleTaskCompleted(taskEl);
+    }
+  });
+
+  // Copy button
+  container.addEventListener("click", e => {
+    if (e.target.classList.contains("task-copy-btn")) {
+      copyTaskText(e.target);
+    }
+  });
+
+  // Edit button
+  container.addEventListener("click", e => {
+    if (e.target.classList.contains("task-edit-btn")) {
+      const taskEl = e.target.closest(".task");
+      if (taskEl) {
+        const phaseIdx = parseInt(taskEl.dataset.phase);
+        const taskIdx = parseInt(taskEl.dataset.task);
+        const taskTextEl = taskEl.querySelector(".task-text");
+        enableTaskEdit(taskTextEl, phaseIdx, taskIdx);
+      }
+    }
+  });
+
+  // Tooltip toggle
+  container.addEventListener("click", e => {
+    if (e.target.classList.contains("task-tooltip-toggle")) {
+      showTaskTooltip(e.target);
+    }
+  });
+
+  // Double-click edit
+  container.addEventListener("dblclick", e => {
+    if (e.target.classList.contains("task-text")) {
+      const taskEl = e.target.closest(".task");
+      if (taskEl) {
+        const phaseIdx = parseInt(taskEl.dataset.phase);
+        const taskIdx = parseInt(taskEl.dataset.task);
+        enableTaskEdit(e.target, phaseIdx, taskIdx);
+      }
+    }
+  });
+
+  // Drag and drop
+  container.addEventListener("mousedown", e => {
+    if (e.target.classList.contains("task-handle")) {
+      startTaskDrag(e);
+    }
+  });
+
+  container.addEventListener("dragover", e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  });
+
+  container.addEventListener("drop", handleTaskDrop);
+
+  // Close tooltips on outside click
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".task-tooltip-toggle")) {
+      const tooltips = container.querySelectorAll(".task-tooltip[style*='display: block']");
+      tooltips.forEach(t => t.style.display = "none");
+    }
+  });
+})();
 
 // ─── Save & History ───────────────────────────────────────────────────────────
 async function saveRoadmap(topic, data) {
@@ -261,6 +614,14 @@ function downloadPDF() {
   const maxW = pageW - margin * 2;
   let y = margin;
 
+  // Phase color palette (matching UI colors)
+  const phaseColors = [
+    [200, 240, 96],
+    [96, 212, 240],
+    [240, 160, 96],
+    [176, 96, 240]
+  ];
+
   function checkPage(needed = 10) {
     if (y + needed > pageH - margin) {
       doc.addPage();
@@ -296,8 +657,8 @@ function downloadPDF() {
   doc.addPage();
   y = margin;
 
-  writeLine(currentTopic, 18, "bold", [20, 20, 20]);
-  y += 4;
+  writeLine(currentTopic, 24, "bold", [20, 20, 20]);
+  y += 8;
 
   const phases = currentRoadmap.phases || [];
   phases.forEach((phase, i) => {
@@ -307,27 +668,39 @@ function downloadPDF() {
     // Phase header bar
     doc.setFillColor(245, 245, 245);
     doc.roundedRect(margin, y - 4, maxW, 14, 2, 2, "F");
-    doc.setTextColor(50, 50, 50);
+
+    // Phase number and title in phase color
+    const phaseColor = phaseColors[i % phaseColors.length];
+    doc.setTextColor(...phaseColor);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(`Phase ${i + 1}: ${phase.title || ""}`, margin + 4, y + 5);
+    doc.setFontSize(14);
+    doc.text(`Phase ${i + 1}: ${phase.title || ""}`, margin + 4, y + 6);
+
+    // Duration in gray
     if (phase.duration) {
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setTextColor(130, 130, 130);
-      doc.text(phase.duration, pageW - margin - 4, y + 5, { align: "right" });
+      doc.text(phase.duration, pageW - margin - 4, y + 6, { align: "right" });
     }
-    y += 18;
+    y += 22;
 
-    if (phase.description) writeLine(phase.description, 10, "normal", [80, 80, 80]);
-    y += 2;
+    if (phase.description) {
+      doc.setTextColor(80, 80, 80);
+      doc.setFontSize(11);
+      const descLines = doc.splitTextToSize(phase.description, maxW);
+      checkPage(descLines.length * 5);
+      doc.text(descLines, margin, y);
+      y += descLines.length * 5 + 4;
+    }
 
     (phase.tasks || []).forEach(task => {
       checkPage(8);
-      doc.setFillColor(200, 240, 96);
+      // Task bullet in phase color
+      doc.setFillColor(...phaseColors[i % phaseColors.length]);
       doc.circle(margin + 2, y - 1, 1.2, "F");
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
+      doc.setFontSize(11);
       doc.setTextColor(40, 40, 40);
       const lines = doc.splitTextToSize(task, maxW - 8);
       doc.text(lines, margin + 6, y);
@@ -337,16 +710,33 @@ function downloadPDF() {
     if (phase.milestone) {
       checkPage(12);
       y += 2;
-      doc.setFillColor(240, 248, 225);
+      // Light milestone box with phase color text
+      doc.setFillColor(245, 250, 240);
       const mLines = doc.splitTextToSize("✓ " + phase.milestone, maxW - 8);
       doc.roundedRect(margin, y - 4, maxW, mLines.length * 5 + 6, 2, 2, "F");
       doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(60, 110, 20);
+      doc.setFontSize(10);
+      doc.setTextColor(...phaseColors[i % phaseColors.length]);
       doc.text(mLines, margin + 4, y);
       y += mLines.length * 5 + 8;
     }
   });
+
+  // Add headers and footers to all content pages (page 2 and beyond)
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 2; p <= totalPages; p++) {
+    doc.setPage(p);
+    // Header: topic and page number
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text(currentTopic, margin, 12);
+    doc.text(`Page ${p - 1} of ${totalPages - 1}`, pageW - margin, 12, { align: "right" });
+    // Footer: generation date and brand
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated ${new Date().toLocaleDateString()} by Pathfinder`, pageW / 2, pageH - 10, { align: "center" });
+  }
 
   doc.save(`roadmap-${currentTopic.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}.pdf`);
 }

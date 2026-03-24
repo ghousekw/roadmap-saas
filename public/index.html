@@ -167,6 +167,154 @@
     }
     .progress-percent { font-size: 11px; color: var(--accent); font-weight: 500; }
 
+    /* ── INTERACTIVE TASKS ───────────────────────────────────────────────────── */
+    .task {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .task:hover {
+      background: var(--surface2);
+    }
+    .task-check {
+      margin: 3px 0 0 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+      width: 16px; height: 16px;
+    }
+    .task-handle {
+      cursor: grab;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 2px 4px;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .task:hover .task-handle {
+      opacity: 1;
+    }
+    .task-handle:active {
+      cursor: grabbing;
+    }
+    .task.completed .task-text {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+    .task-text {
+      flex: 1;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1.4;
+    }
+    .task-text:hover {
+      background: rgba(255,255,255,0.05);
+    }
+    .task-text[contenteditable="true"] {
+      background: var(--surface2);
+      outline: 2px solid var(--accent);
+    }
+    .task-actions {
+      display: none;
+      gap: 4px;
+      align-items: center;
+    }
+    .task:hover .task-actions {
+      display: flex;
+    }
+    .task-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 4px;
+      border-radius: 4px;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .task-btn:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .task.dragging {
+      opacity: 0.4;
+      background: var(--accent-dim);
+    }
+
+    /* ── PHASE COLLAPSE ─────────────────────────────────────────────────────── */
+    .phase-header {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+    }
+    .phase-header::before {
+      content: '▶';
+      font-size: 10px;
+      margin-right: 8px;
+      transition: transform 0.2s;
+      color: var(--muted);
+    }
+    .phase-card.collapsed .phase-header::before {
+      transform: rotate(90deg);
+    }
+    .phase-card.collapsed .phase-body {
+      display: none;
+    }
+
+    /* ── OVERALL PROGRESS BAR ────────────────────────────────────────────────── */
+    #overall-progress-container {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+    }
+    .overall-progress-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .overall-progress-percent {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── TOOLTIP ───────────────────────────────────────────────────────────── */
+    .task-tooltip {
+      position: absolute;
+      left: 0;
+      bottom: 100%;
+      margin-bottom: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      max-width: 250px;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      line-height: 1.4;
+    }
+    .task-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 10px;
+      border: 6px solid transparent;
+      border-top-color: var(--surface);
+    }
+
     /* LOADING INSIDE CARD */
     .input-card .loading {
       padding: 1rem 0 0.25rem;
@@ -353,6 +501,15 @@
       <div class="output-actions">
         <button class="btn" onclick="copyShareLink()">Share ↗</button>
         <button class="btn" onclick="downloadPDF()">Export PDF</button>
+      </div>
+    </div>
+    <div id="overall-progress-container" style="display: none;">
+      <div class="overall-progress-label">
+        <span>Overall Progress</span>
+        <span class="overall-progress-percent" id="overall-progress-percent">0%</span>
+      </div>
+      <div class="progress-container">
+        <div class="progress-bar" id="overall-progress-bar"></div>
       </div>
     </div>
     <div class="phases" id="phases-container"></div>
