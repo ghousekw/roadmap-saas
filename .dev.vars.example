@@ -1,0 +1,7 @@
+# Local Development Environment Variables
+# Copy this file to .env and fill in your actual values
+# Wrangler automatically loads .dev.vars
+
+NVIDIA_API_KEY=sk-your-nvidia-api-key-here
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-service-role-key-here

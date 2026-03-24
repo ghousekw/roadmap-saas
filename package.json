@@ -1,0 +1,19 @@
+{
+  "name": "pathfinder-roadmap-saas",
+  "version": "1.0.0",
+  "description": "AI-powered learning roadmap generator",
+  "main": "functions/generate.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "start": "wrangler dev",
+    "setup": "node setup-dev.js"
+  },
+  "keywords": ["roadmap", "ai", "cloudflare", "workers", "supabase"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

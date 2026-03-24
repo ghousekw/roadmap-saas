@@ -1,8 +1,17 @@
-// ─── Supabase init (FIXED: was supabase.createClient which doesn't exist) ────
+// ─── Configuration ─────────────────────────────────────────────────────────────
+// In production, these are injected by the build process or set via Wrangler variables
+// For local development, set these in a config object or replace the values below
+
+const CONFIG = {
+  supabaseUrl: typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://npqevqiwmsibqswtjjpc.supabase.co',
+  supabaseAnonKey: typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : 'sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR'
+};
+
+// ─── Supabase init ─────────────────────────────────────────────────────────────
 const { createClient } = supabase;
 const db = createClient(
-  "https://npqevqiwmsibqswtjjpc.supabase.co",
-  "sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR"
+  CONFIG.supabaseUrl,
+  CONFIG.supabaseAnonKey
 );
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -148,7 +157,11 @@ function renderRoadmap(topic, roadmap) {
   });
 
   section.style.display = "block";
-  section.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Delay scroll to ensure DOM is rendered
+  setTimeout(() => {
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 100);
 }
 
 // ─── Save & History ───────────────────────────────────────────────────────────
@@ -339,8 +352,69 @@ function downloadPDF() {
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
+let progressInterval = null;
+
 function showLoading(on) {
-  document.getElementById("loading").style.display = on ? "block" : "none";
+  const loadingEl = document.getElementById("loading");
+  const progressBar = document.getElementById("progress-bar");
+  const progressPercent = document.getElementById("progress-percent");
+  const loadingText = document.getElementById("loading-text");
+
+  if (on) {
+    loadingEl.style.display = "block";
+    let progress = 0;
+
+    // Reset UI
+    if (progressBar) progressBar.style.width = "0%";
+    if (progressPercent) progressPercent.textContent = "0%";
+    if (loadingText) loadingText.textContent = "Connecting to AI...";
+
+    // Progress stages
+    const stages = [
+      { progress: 20, text: "Analyzing your topic..." },
+      { progress: 35, text: "Structuring learning phases..." },
+      { progress: 50, text: "Generating tasks..." },
+      { progress: 70, text: "Refining roadmap..." },
+      { progress: 85, text: "Finalizing..." }
+    ];
+    let stageIndex = 0;
+
+    // Simulate progress
+    progressInterval = setInterval(() => {
+      // Update stage text
+      if (stageIndex < stages.length && progress >= stages[stageIndex].progress) {
+        if (loadingText) loadingText.textContent = stages[stageIndex].text;
+        stageIndex++;
+      }
+
+      // Increment progress (slower as it approaches 90%)
+      if (progress < 85) {
+        progress += Math.random() * 2 + 0.5;
+      } else if (progress < 90) {
+        progress += 0.3;
+      }
+
+      if (progress > 90) progress = 90;
+
+      if (progressBar) progressBar.style.width = progress + "%";
+      if (progressPercent) progressPercent.textContent = Math.round(progress) + "%";
+    }, 80);
+  } else {
+    // Complete progress
+    if (progressBar) progressBar.style.width = "100%";
+    if (progressPercent) progressPercent.textContent = "100%";
+    if (loadingText) loadingText.textContent = "Complete!";
+
+    clearInterval(progressInterval);
+    progressInterval = null;
+
+    // Hide after brief delay
+    setTimeout(() => {
+      loadingEl.style.display = "none";
+      if (progressBar) progressBar.style.width = "0%";
+      if (progressPercent) progressPercent.textContent = "0%";
+    }, 400);
+  }
 }
 
 function showError(msg) {
