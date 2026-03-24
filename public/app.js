@@ -613,6 +613,7 @@ function downloadPDF() {
   const margin = 20;
   const maxW = pageW - margin * 2;
   let y = margin;
+  const LINE_HEIGHT = 14; // Fixed line height for consistent spacing
 
   // Phase color palette (matching UI colors)
   const phaseColors = [
@@ -625,18 +626,22 @@ function downloadPDF() {
   function checkPage(needed = 10) {
     if (y + needed > pageH - margin) {
       doc.addPage();
+      // Fill new page with dark background
+      doc.setFillColor(13, 13, 15);
+      doc.rect(0, 0, pageW, pageH, "F");
       y = margin;
     }
   }
 
   function writeLine(text, size = 11, style = "normal", color = [30, 30, 30]) {
     doc.setFontSize(size);
-    doc.setFont("helvetica", style);
+    doc.setFont("times", style);
     doc.setTextColor(...color);
     const lines = doc.splitTextToSize(String(text), maxW);
-    checkPage(lines.length * (size * 0.45));
-    doc.text(lines, margin, y);
-    y += lines.length * (size * 0.45) + 2;
+    const lh = size * 1.3; // Dynamic line height based on font size
+    checkPage(lines.length * lh);
+    doc.text(lines, margin, y, { lineHeight: lh });
+    y += lines.length * lh;
   }
 
   // Title page - centered with border
@@ -712,13 +717,19 @@ function downloadPDF() {
       doc.setFontSize(11);
       doc.setFont("times", "normal");
       const descLines = doc.splitTextToSize(phase.description, maxW);
-      checkPage(descLines.length * 5 + 4);
-      doc.text(descLines, margin, y);
-      y += descLines.length * 5 + 4;
+      const descHeight = descLines.length * LINE_HEIGHT + 4;
+      checkPage(descHeight);
+      doc.text(descLines, margin, y, { lineHeight: LINE_HEIGHT });
+      y += descHeight;
     }
 
     (phase.tasks || []).forEach((task, taskIdx) => {
-      checkPage(10);
+      doc.setFont("times", "normal");
+      doc.setFontSize(11);
+      const lines = doc.splitTextToSize(task, maxW - 12);
+      const taskHeight = Math.max(6, lines.length * LINE_HEIGHT) + 2;
+      checkPage(taskHeight);
+
       const isCompleted = completedSet.has(`${i}-${taskIdx}`);
 
       // Draw checkbox (square) with phase color outline
@@ -732,27 +743,25 @@ function downloadPDF() {
       }
 
       // Task text in light gray
-      doc.setFont("times", "normal");
-      doc.setFontSize(11);
       doc.setTextColor(240, 237, 232);
-      const lines = doc.splitTextToSize(task, maxW - 12);
-      doc.text(lines, margin + 8, y);
-      y += Math.max(6, lines.length * 5 + 2);
+      doc.text(lines, margin + 8, y, { lineHeight: LINE_HEIGHT });
+      y += taskHeight;
     });
 
     if (phase.milestone) {
-      checkPage(14);
+      doc.setFont("times", "italic");
+      doc.setFontSize(10);
+      const mLines = doc.splitTextToSize("✓ " + phase.milestone, maxW - 8);
+      const milestoneHeight = mLines.length * LINE_HEIGHT + 10;
+      checkPage(milestoneHeight);
       y += 2;
       // Dark milestone box with phase color border
       doc.setDrawColor(...phaseColors[i % phaseColors.length]);
       doc.setLineWidth(0.5);
-      const mLines = doc.splitTextToSize("✓ " + phase.milestone, maxW - 8);
-      doc.roundedRect(margin, y - 4, maxW, mLines.length * 5 + 8, 2, 2, "S");
-      doc.setFont("times", "italic");
-      doc.setFontSize(10);
+      doc.roundedRect(margin, y - 4, maxW, mLines.length * LINE_HEIGHT + 6, 2, 2, "S");
       doc.setTextColor(200, 240, 96);
-      doc.text(mLines, margin + 4, y);
-      y += mLines.length * 5 + 10;
+      doc.text(mLines, margin + 4, y, { lineHeight: LINE_HEIGHT });
+      y += mLines.length * LINE_HEIGHT + 8;
     }
   });
 
