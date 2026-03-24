@@ -643,13 +643,13 @@ function downloadPDF() {
   doc.setFillColor(13, 13, 15);
   doc.rect(0, 0, pageW, pageH, "F");
   // Page border
-  doc.setDrawColor(30, 30, 30);
-  doc.setLineWidth(0.5);
+  doc.setDrawColor(20, 20, 23);
+  doc.setLineWidth(1);
   doc.rect(margin, margin, pageW - margin * 2, pageH - margin * 2);
   const centerX = pageW / 2;
   const startY = pageH * 0.4;
   doc.setTextColor(200, 240, 96);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("times", "bold");
   doc.setFontSize(34);
   doc.text("Pathfinder", centerX, startY, { align: "center" });
   doc.setTextColor(240, 237, 232);
@@ -662,70 +662,97 @@ function downloadPDF() {
 
   // Content pages
   doc.addPage();
+  // Fill entire content page with dark background
+  doc.setFillColor(13, 13, 15);
+  doc.rect(0, 0, pageW, pageH, "F");
   y = margin;
 
-  writeLine(currentTopic, 24, "bold", [20, 20, 20]);
+  // Get completed tasks from DOM
+  const completedCheckboxes = document.querySelectorAll('.task-check:checked');
+  const completedSet = new Set();
+  completedCheckboxes.forEach(cb => {
+    const phaseIdx = parseInt(cb.dataset.phaseIdx);
+    const taskIdx = parseInt(cb.dataset.taskIdx);
+    completedSet.add(`${phaseIdx}-${taskIdx}`);
+  });
+
+  writeLine(currentTopic, 24, "bold", [240, 237, 232]);
   y += 8;
 
   const phases = currentRoadmap.phases || [];
   phases.forEach((phase, i) => {
-    checkPage(20);
+    checkPage(24);
     y += 4;
 
-    // Phase header bar
-    doc.setFillColor(245, 245, 245);
-    doc.roundedRect(margin, y - 4, maxW, 14, 2, 2, "F");
-
-    // Phase number and title in phase color
+    // Phase header bar - dark surface with phase color accent
+    doc.setFillColor(20, 20, 23);
+    doc.roundedRect(margin, y - 4, maxW, 18, 2, 2, "F");
+    // Accent line on left
     const phaseColor = phaseColors[i % phaseColors.length];
-    doc.setTextColor(...phaseColor);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(`Phase ${i + 1}: ${phase.title || ""}`, margin + 4, y + 6);
+    doc.setFillColor(...phaseColor);
+    doc.rect(margin, y - 4, 3, 18, "F");
 
-    // Duration in gray
+    // Phase number and title in light text
+    doc.setTextColor(240, 237, 232);
+    doc.setFont("times", "bold");
+    doc.setFontSize(14);
+    doc.text(`Phase ${i + 1}: ${phase.title || ""}`, margin + 10, y + 8);
+
+    // Duration in muted
     if (phase.duration) {
-      doc.setFont("helvetica", "normal");
+      doc.setFont("times", "italic");
       doc.setFontSize(10);
-      doc.setTextColor(130, 130, 130);
-      doc.text(phase.duration, pageW - margin - 4, y + 6, { align: "right" });
+      doc.setTextColor(122, 120, 128);
+      doc.text(phase.duration, pageW - margin - 4, y + 8, { align: "right" });
     }
     y += 22;
 
     if (phase.description) {
-      doc.setTextColor(80, 80, 80);
+      doc.setTextColor(200, 200, 200);
       doc.setFontSize(11);
+      doc.setFont("times", "normal");
       const descLines = doc.splitTextToSize(phase.description, maxW);
-      checkPage(descLines.length * 5);
+      checkPage(descLines.length * 5 + 4);
       doc.text(descLines, margin, y);
       y += descLines.length * 5 + 4;
     }
 
-    (phase.tasks || []).forEach(task => {
-      checkPage(8);
-      // Task bullet in phase color
-      doc.setFillColor(...phaseColors[i % phaseColors.length]);
-      doc.circle(margin + 2, y - 1, 1.2, "F");
-      doc.setFont("helvetica", "normal");
+    (phase.tasks || []).forEach((task, taskIdx) => {
+      checkPage(10);
+      const isCompleted = completedSet.has(`${i}-${taskIdx}`);
+
+      // Draw checkbox (square) with phase color outline
+      doc.setDrawColor(...phaseColor);
+      doc.setLineWidth(0.5);
+      doc.rect(margin - 2, y - 4, 6, 6, "S");
+      if (isCompleted) {
+        // Fill checkbox with phase color
+        doc.setFillColor(...phaseColor);
+        doc.rect(margin - 2, y - 4, 6, 6, "F");
+      }
+
+      // Task text in light gray
+      doc.setFont("times", "normal");
       doc.setFontSize(11);
-      doc.setTextColor(40, 40, 40);
-      const lines = doc.splitTextToSize(task, maxW - 8);
-      doc.text(lines, margin + 6, y);
-      y += lines.length * 5 + 2;
+      doc.setTextColor(240, 237, 232);
+      const lines = doc.splitTextToSize(task, maxW - 12);
+      doc.text(lines, margin + 8, y);
+      y += Math.max(6, lines.length * 5 + 2);
     });
 
     if (phase.milestone) {
-      checkPage(12);
+      checkPage(14);
       y += 2;
-      // Light milestone box with phase color text
-      doc.setFillColor(245, 250, 240);
+      // Dark milestone box with phase color border
+      doc.setDrawColor(...phaseColors[i % phaseColors.length]);
+      doc.setLineWidth(0.5);
       const mLines = doc.splitTextToSize("✓ " + phase.milestone, maxW - 8);
-      doc.roundedRect(margin, y - 4, maxW, mLines.length * 5 + 6, 2, 2, "F");
-      doc.setFont("helvetica", "italic");
+      doc.roundedRect(margin, y - 4, maxW, mLines.length * 5 + 8, 2, 2, "S");
+      doc.setFont("times", "italic");
       doc.setFontSize(10);
-      doc.setTextColor(...phaseColors[i % phaseColors.length]);
+      doc.setTextColor(200, 240, 96);
       doc.text(mLines, margin + 4, y);
-      y += mLines.length * 5 + 8;
+      y += mLines.length * 5 + 10;
     }
   });
 
@@ -734,15 +761,19 @@ function downloadPDF() {
   for (let p = 2; p <= totalPages; p++) {
     doc.setPage(p);
     // Header: topic and page number
+    doc.setFont("times", "normal");
     doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(120, 120, 120);
+    doc.setTextColor(122, 120, 128);
     doc.text(currentTopic, margin, 12);
     doc.text(`Page ${p - 1} of ${totalPages - 1}`, pageW - margin, 12, { align: "right" });
     // Footer: generation date and brand
     doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(100, 100, 100);
     doc.text(`Generated ${new Date().toLocaleDateString()} by Pathfinder`, pageW / 2, pageH - 10, { align: "center" });
+    // Thin separator line
+    doc.setDrawColor(30, 30, 35);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 18, pageW - margin, 18);
   }
 
   doc.save(`roadmap-${currentTopic.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}.pdf`);
