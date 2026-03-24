@@ -639,19 +639,26 @@ function downloadPDF() {
     y += lines.length * (size * 0.45) + 2;
   }
 
-  // Title page
+  // Title page - centered with border
   doc.setFillColor(13, 13, 15);
   doc.rect(0, 0, pageW, pageH, "F");
+  // Page border
+  doc.setDrawColor(30, 30, 30);
+  doc.setLineWidth(0.5);
+  doc.rect(margin, margin, pageW - margin * 2, pageH - margin * 2);
+  const centerX = pageW / 2;
+  const startY = pageH * 0.4;
   doc.setTextColor(200, 240, 96);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(28);
-  doc.text("Pathfinder", margin, 40);
+  doc.setFontSize(34);
+  doc.text("Pathfinder", centerX, startY, { align: "center" });
   doc.setTextColor(240, 237, 232);
-  doc.setFontSize(18);
-  doc.text(doc.splitTextToSize(currentTopic, maxW), margin, 60);
+  doc.setFontSize(20);
+  doc.text(doc.splitTextToSize(currentTopic, maxW), centerX, startY + 30, { align: "center" });
   doc.setTextColor(122, 120, 128);
-  doc.setFontSize(10);
-  doc.text(`Generated ${new Date().toLocaleDateString()}`, margin, 80);
+  doc.setFontSize(12);
+  doc.text("Learning Roadmap", centerX, startY + 60, { align: "center" });
+  doc.text(`Generated ${new Date().toLocaleDateString()}`, centerX, pageH - 30, { align: "center" });
 
   // Content pages
   doc.addPage();
