@@ -716,19 +716,19 @@ function downloadPDF() {
       doc.setTextColor(200, 200, 200);
       doc.setFontSize(11);
       doc.setFont("times", "normal");
-      const descLines = doc.splitTextToSize(phase.description, maxW);
-      const descHeight = descLines.length * LINE_HEIGHT + 4;
-      checkPage(descHeight);
-      doc.text(descLines, margin, y, { lineHeight: LINE_HEIGHT });
-      y += descHeight;
+      const descDims = doc.getTextDimensions(phase.description, { maxWidth: maxW, lineHeight: LINE_HEIGHT });
+      const needed = descDims.height + 4;
+      checkPage(needed);
+      doc.text(phase.description, margin, y, { maxWidth: maxW, lineHeight: LINE_HEIGHT });
+      y += needed;
     }
 
     (phase.tasks || []).forEach((task, taskIdx) => {
       doc.setFont("times", "normal");
       doc.setFontSize(11);
-      const lines = doc.splitTextToSize(task, maxW - 12);
-      const taskHeight = Math.max(6, lines.length * LINE_HEIGHT) + 2;
-      checkPage(taskHeight);
+      const textDims = doc.getTextDimensions(task, { maxWidth: maxW - 12, lineHeight: LINE_HEIGHT });
+      const needed = textDims.height + 2;
+      checkPage(needed);
 
       const isCompleted = completedSet.has(`${i}-${taskIdx}`);
 
@@ -744,24 +744,25 @@ function downloadPDF() {
 
       // Task text in light gray
       doc.setTextColor(240, 237, 232);
-      doc.text(lines, margin + 8, y, { lineHeight: LINE_HEIGHT });
-      y += taskHeight;
+      doc.text(task, margin + 8, y, { maxWidth: maxW - 12, lineHeight: LINE_HEIGHT });
+      y += needed;
     });
 
     if (phase.milestone) {
       doc.setFont("times", "italic");
       doc.setFontSize(10);
-      const mLines = doc.splitTextToSize("✓ " + phase.milestone, maxW - 8);
-      const milestoneHeight = mLines.length * LINE_HEIGHT + 10;
-      checkPage(milestoneHeight);
+      const milestoneText = "✓ " + phase.milestone;
+      const milestoneDims = doc.getTextDimensions(milestoneText, { maxWidth: maxW - 8, lineHeight: LINE_HEIGHT });
+      const needed = milestoneDims.height + 10;
+      checkPage(needed);
       y += 2;
       // Dark milestone box with phase color border
-      doc.setDrawColor(...phaseColors[i % phaseColors.length]);
+      doc.setDrawColor(...phaseColor);
       doc.setLineWidth(0.5);
-      doc.roundedRect(margin, y - 4, maxW, mLines.length * LINE_HEIGHT + 6, 2, 2, "S");
+      doc.roundedRect(margin, y - 4, maxW, milestoneDims.height + 6, 2, 2, "S");
       doc.setTextColor(200, 240, 96);
-      doc.text(mLines, margin + 4, y, { lineHeight: LINE_HEIGHT });
-      y += mLines.length * LINE_HEIGHT + 8;
+      doc.text(milestoneText, margin + 4, y, { maxWidth: maxW - 8, lineHeight: LINE_HEIGHT });
+      y += milestoneDims.height + 8;
     }
   });
 
