@@ -1,18 +1,24 @@
 // ─── Configuration ─────────────────────────────────────────────────────────────
-// In production, these are injected by the build process or set via Wrangler variables
-// For local development, set these in a config object or replace the values below
-
 const CONFIG = {
-  supabaseUrl: typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://npqevqiwmsibqswtjjpc.supabase.co',
-  supabaseAnonKey: typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : 'sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR'
+  supabaseUrl: 'https://npqevqiwmsibqswtjjpc.supabase.co',
+  supabaseAnonKey: 'sb_publishable_HR7eoJUtI058I2TQqdif1Q_wtwygTiR'
+};
+
+// Diagram configuration
+const DIAGRAM_CONFIG = {
+  phaseGap: 300,
+  taskGap: 140,
+  horizontalOffset: 450,
+  nodeWidth: 320,
+  taskNodeWidth: 360,
+  phaseHeight: 80,
+  topicHeight: 60,
+  topicY: 100
 };
 
 // ─── Supabase init ─────────────────────────────────────────────────────────────
 const { createClient } = supabase;
-const db = createClient(
-  CONFIG.supabaseUrl,
-  CONFIG.supabaseAnonKey
-);
+const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentRoadmap = null;
@@ -49,11 +55,8 @@ async function handleAuth() {
 // ─── Generate ─────────────────────────────────────────────────────────────────
 async function generate() {
   const topic = document.getElementById("topic").value.trim();
-  const model = "nvidia"; // Using Nvidia Llama only
-
   if (!topic) return showError("Please enter a topic first.");
-  if (topic.length > 300) return showError("Topic must be under 300 characters.");
-
+  
   hideError();
   showLoading(true);
   document.getElementById("gen-btn").disabled = true;
@@ -63,17 +66,11 @@ async function generate() {
     const res = await fetch("/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: topic, model }),
+      body: JSON.stringify({ prompt: topic, model: "nvidia" }),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server error ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error("Server error");
     const data = await res.json();
-
-    // Extract the roadmap JSON from Nvidia API response (OpenAI format)
     const text = data.choices?.[0]?.message?.content ?? "";
     const roadmap = parseRoadmap(text);
 
@@ -82,52 +79,249 @@ async function generate() {
 
     renderRoadmap(topic, roadmap);
     await saveRoadmap(topic, roadmap);
-
   } catch (err) {
-    showError(err.message || "Something went wrong. Please try again.");
+    showError(err.message || "Something went wrong.");
   } finally {
     showLoading(false);
     document.getElementById("gen-btn").disabled = false;
   }
 }
 
-// ─── Parse & Render ───────────────────────────────────────────────────────────
 function parseRoadmap(text) {
   try {
-    // Strip markdown code fences if present
     const clean = text.replace(/```json\n?|```\n?/g, "").trim();
     const start = clean.indexOf("{");
     const end = clean.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("No JSON found");
     return JSON.parse(clean.slice(start, end + 1));
   } catch {
-    // Fallback: wrap raw text as a single-phase roadmap
-    return {
-      title: "Your Roadmap",
-      phases: [{
-        title: "Getting Started",
-        duration: "Ongoing",
-        description: text.slice(0, 300),
-        tasks: [text],
-        milestone: "Complete this phase"
-      }]
-    };
+    return { title: "Roadmap", phases: [{ title: "Basics", tasks: [text] }] };
   }
 }
 
-function generateTaskTip(task, phase) {
-  const milestone = phase.milestone || "the phase milestone";
-  const verbs = ["Focus on", "Practice", "Master", "Understand", "Build", "Explore"];
-  const verb = verbs[Math.floor(Math.random() * verbs.length)];
-  return `${verb} "${task.slice(0, 50)}${task.length>50?'...':''}" to achieve ${milestone}.`;
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderRoadmap(topic, roadmap) {
+  const section = document.getElementById("output-section");
+  const topicEl = document.getElementById("output-topic");
+  topicEl.textContent = topic;
+
+  renderRoadmapDiagram(topic, roadmap);
+  updateOverallProgress();
+  section.style.display = "block";
+  setTimeout(() => section.scrollIntoView({ behavior: "smooth" }), 100);
+}
+
+function renderRoadmapDiagram(topic, roadmap) {
+  const container = document.getElementById("roadmap-diagram");
+  if (!container) return;
+  container.innerHTML = "";
+  container.style.display = "block";
+
+  const phases = roadmap.phases || [];
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "diagram-svg");
+  container.appendChild(svg);
+
+  const draw = () => {
+    container.querySelectorAll(".node").forEach(n => n.remove());
+    svg.innerHTML = "";
+    const centerX = container.offsetWidth / 2;
+    let currentY = DIAGRAM_CONFIG.topicY;
+
+    const topicNode = createNode(topic, "node-topic", centerX, currentY);
+    container.appendChild(topicNode);
+    let prevPhasePoint = { x: centerX, y: currentY + DIAGRAM_CONFIG.topicHeight / 2 };
+    currentY += 180;
+
+    phases.forEach((phase, phaseIdx) => {
+      const tasks = phase.tasks || [];
+      const phaseTaskHeight = Math.max(0, (tasks.length - 1) * DIAGRAM_CONFIG.taskGap);
+      const phaseX = centerX;
+      const phaseY = currentY + (phaseTaskHeight / 2);
+      
+      const phaseNode = createNode(
+        `<div><div class="node-title">${escHtml(phase.title)}</div><div class="node-meta">${escHtml(phase.duration || "")}</div></div>`,
+        `node-phase node-p${phaseIdx % 4}`,
+        phaseX, phaseY
+      );
+      container.appendChild(phaseNode);
+      drawConnection(svg, prevPhasePoint, { x: phaseX, y: phaseY - DIAGRAM_CONFIG.phaseHeight / 2 }, "spine");
+      
+      const phaseCenterRight = { x: phaseX + DIAGRAM_CONFIG.nodeWidth / 2, y: phaseY };
+      const phaseCenterLeft = { x: phaseX - DIAGRAM_CONFIG.nodeWidth / 2, y: phaseY };
+      const side = (phaseIdx % 2 === 0) ? 1 : -1; 
+      
+      tasks.forEach((task, taskIdx) => {
+        const taskX = phaseX + (DIAGRAM_CONFIG.horizontalOffset * side);
+        const taskY = phaseY + (taskIdx - (tasks.length - 1) / 2) * DIAGRAM_CONFIG.taskGap;
+        const nodeId = `${phaseIdx}-${taskIdx}`;
+        const meta = currentRoadmap.nodeMeta?.[nodeId] || {};
+        const isDone = !!meta.completedAt;
+
+        const taskContent = `
+          <div class="task ${isDone ? 'done' : ''}" data-phase="${phaseIdx}" data-task="${taskIdx}">
+            ${isDone ? '<div class="node-done-badge">LEARNED</div>' : ''}
+            <div class="task-handle">≡</div>
+            <span class="task-text">${escHtml(task)}</span>
+            <div class="task-actions"><span class="task-btn">Studio →</span></div>
+          </div>
+        `;
+
+        const taskNode = createNode(taskContent, `node-task node-p${phaseIdx % 4} ${isDone ? 'done' : ''}`, taskX, taskY);
+        taskNode.onclick = () => openTaskWorkspace(phaseIdx, taskIdx, task);
+        container.appendChild(taskNode);
+        
+        const startPoint = (side === 1) ? phaseCenterRight : phaseCenterLeft;
+        const endPoint = { x: taskX - (DIAGRAM_CONFIG.taskNodeWidth / 2) * side, y: taskY };
+        drawConnection(svg, startPoint, endPoint, "dotted");
+      });
+
+      prevPhasePoint = { x: phaseX, y: phaseY + DIAGRAM_CONFIG.phaseHeight / 2 };
+      currentY += Math.max(DIAGRAM_CONFIG.phaseGap, phaseTaskHeight + 150);
+    });
+    container.style.minHeight = (currentY + 100) + "px";
+  };
+
+  setTimeout(draw, 50);
+  window.addEventListener('resize', draw);
+  renderSidebar();
+}
+
+// ─── Studio Workspace ─────────────────────────────────────────────────────────
+let activeWorkspaceNode = null;
+
+function openTaskWorkspace(phaseIdx, taskIdx, taskTitle) {
+  if (!currentRoadmap.nodeMeta) currentRoadmap.nodeMeta = {};
+  activeWorkspaceNode = { phaseIdx, taskIdx, title: taskTitle };
+  const nodeId = `${phaseIdx}-${taskIdx}`;
+  
+  if (!currentRoadmap.nodeMeta[nodeId]) {
+    currentRoadmap.nodeMeta[nodeId] = { customLinks: [], completedAt: null };
+  }
+  const meta = currentRoadmap.nodeMeta[nodeId];
+
+  document.getElementById("workspace-title").textContent = taskTitle;
+  document.getElementById("task-workspace").classList.add("open");
+
+  const btn = document.getElementById("mark-done-btn");
+  const ts = document.getElementById("workspace-timestamp");
+  if (meta.completedAt) {
+    btn.textContent = "Mark as Unlearned";
+    btn.classList.add("btn-secondary"); btn.classList.remove("btn-primary");
+    ts.style.display = "inline-block";
+    const d = new Date(meta.completedAt);
+    ts.textContent = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+  } else {
+    btn.textContent = "Mark as Learned ✓";
+    btn.classList.add("btn-primary"); btn.classList.remove("btn-secondary");
+    ts.style.display = "none";
+  }
+
+  const aiList = document.getElementById("workspace-ai-resources");
+  const resources = [
+    { title: "Documentation", desc: "Reference material", url: `https://www.google.com/search?q=${encodeURIComponent(taskTitle + " documentation")}` },
+    { title: "Tutorials", desc: "Guides & Videos", url: `https://www.youtube.com/results?search_query=${encodeURIComponent(taskTitle + " tutorial")}` },
+    { title: "Examples", desc: "Practical code", url: `https://github.com/search?q=${encodeURIComponent(taskTitle)}` }
+  ];
+  aiList.innerHTML = resources.map(r => `
+    <a href="${r.url}" target="_blank" class="resource-link">
+      <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--secondary); margin-bottom: 4px;">${r.title}</div>
+      <div style="font-size: 13px; font-weight: 600;">Explore ${r.desc}</div>
+    </a>
+  `).join("");
+
+  renderCustomLinks();
+}
+
+function closeTaskWorkspace() {
+  document.getElementById("task-workspace").classList.remove("open");
+  activeWorkspaceNode = null;
+}
+
+async function toggleTaskCompletion() {
+  if (!activeWorkspaceNode) return;
+  const nodeId = `${activeWorkspaceNode.phaseIdx}-${activeWorkspaceNode.taskIdx}`;
+  const meta = currentRoadmap.nodeMeta[nodeId];
+  meta.completedAt = meta.completedAt ? null : new Date().toISOString();
+  
+  await saveRoadmap(currentTopic, currentRoadmap);
+  renderRoadmapDiagram(currentTopic, currentRoadmap);
+  openTaskWorkspace(activeWorkspaceNode.phaseIdx, activeWorkspaceNode.taskIdx, activeWorkspaceNode.title);
+  updateOverallProgress();
+}
+
+function renderCustomLinks() {
+  const nodeId = `${activeWorkspaceNode.phaseIdx}-${activeWorkspaceNode.taskIdx}`;
+  const meta = currentRoadmap.nodeMeta[nodeId];
+  const container = document.getElementById("workspace-custom-resources");
+  if (!meta.customLinks || meta.customLinks.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding: 2rem; border: 2px dashed var(--border); color: var(--muted); font-size: 12px; font-weight:700;">No saved links yet. Paste a URL above.</div>`;
+    return;
+  }
+  container.innerHTML = meta.customLinks.map((l, i) => `
+    <div class="resource-link" style="flex-direction:row; justify-content:space-between; align-items:center; padding: 1rem;">
+      <a href="${l.url}" target="_blank" style="text-decoration:none; color:inherit; display:flex; gap:12px; align-items:center; flex:1; overflow:hidden;">
+        <span style="font-size:20px;">📎</span>
+        <strong style="text-transform:lowercase; font-size: 13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${l.title}</strong>
+      </a>
+      <span class="remove-link-btn" onclick="removeCustomLink(${i})">&times;</span>
+    </div>
+  `).join("");
+}
+
+async function addCustomLink() {
+  if (!activeWorkspaceNode) return;
+  const input = document.getElementById("custom-link-url");
+  const url = input.value.trim();
+  if (!url) return;
+  
+  let finalUrl = url;
+  if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'https://' + finalUrl;
+  let domain = "Link";
+  try { domain = new URL(finalUrl).hostname.replace("www.", ""); } catch (e) {}
+
+  const nodeId = `${activeWorkspaceNode.phaseIdx}-${activeWorkspaceNode.taskIdx}`;
+  currentRoadmap.nodeMeta[nodeId].customLinks.push({ url: finalUrl, title: domain });
+  input.value = "";
+  renderCustomLinks();
+  await saveRoadmap(currentTopic, currentRoadmap);
+}
+
+async function removeCustomLink(idx) {
+  if (!activeWorkspaceNode) return;
+  const nodeId = `${activeWorkspaceNode.phaseIdx}-${activeWorkspaceNode.taskIdx}`;
+  currentRoadmap.nodeMeta[nodeId].customLinks.splice(idx, 1);
+  renderCustomLinks();
+  await saveRoadmap(currentTopic, currentRoadmap);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function createNode(content, className, x, y) {
+  const div = document.createElement("div");
+  div.className = `node ${className}`; div.innerHTML = content;
+  div.style.left = `${x}px`; div.style.top = `${y}px`; div.style.transform = "translate(-50%, -50%)";
+  div.style.position = "absolute";
+  return div;
+}
+
+function drawConnection(svg, p1, p2, extraClass) {
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("class", `connector-path ${extraClass || ''}`);
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  let d = (Math.abs(dx) < 10) ? `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}` : 
+    `M ${p1.x} ${p1.y} C ${p1.x + dx * 0.45} ${p1.y}, ${p1.x + dx * 0.55} ${p2.y}, ${p2.x} ${p2.y}`;
+  path.setAttribute("d", d);
+  svg.appendChild(path);
 }
 
 function updateOverallProgress() {
-  const container = document.getElementById("phases-container");
-  if (!container) return;
-  const checkboxes = container.querySelectorAll(".task-check");
-  const total = checkboxes.length;
-  const completed = container.querySelectorAll(".task-check:checked").length;
+  if (!currentRoadmap || !currentRoadmap.phases) return;
+  let total = 0, completed = 0;
+  currentRoadmap.phases.forEach((p, pIdx) => {
+    p.tasks.forEach((t, tIdx) => {
+      total++;
+      if (currentRoadmap.nodeMeta?.[`${pIdx}-${tIdx}`]?.completedAt) completed++;
+    });
+  });
   const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
   const bar = document.getElementById("overall-progress-bar");
   const percentEl = document.getElementById("overall-progress-percent");
@@ -135,730 +329,36 @@ function updateOverallProgress() {
   if (percentEl) percentEl.textContent = percent + "%";
 }
 
-function renderRoadmap(topic, roadmap) {
-  const colors = ["p1", "p2", "p3", "p4"];
-  const labels = ["Foundation", "Building", "Advanced", "Mastery"];
-  const section = document.getElementById("output-section");
-  const container = document.getElementById("phases-container");
-  const topicEl = document.getElementById("output-topic");
-
-  // Safe DOM update
-  topicEl.textContent = "";
-  topicEl.appendChild(document.createTextNode("Roadmap: "));
-  const span = document.createElement("span");
-  span.textContent = topic;
-  topicEl.appendChild(span);
-
-  container.innerHTML = "";
-
-  const phases = roadmap.phases || [];
-  phases.forEach((phase, phaseIdx) => {
-    const colorClass = colors[phaseIdx % colors.length];
-    const label = labels[phaseIdx % labels.length];
-
-    // Create phase card
-    const card = document.createElement("div");
-    card.className = `phase-card ${colorClass}`;
-    card.dataset.phaseIndex = phaseIdx;
-
-    // Header
-    const header = document.createElement("div");
-    header.className = "phase-header";
-
-    const phaseNum = document.createElement("div");
-    phaseNum.className = "phase-num";
-    phaseNum.textContent = String(phaseIdx + 1).padStart(2, "0");
-    header.appendChild(phaseNum);
-
-    const meta = document.createElement("div");
-    meta.className = "phase-meta";
-    const title = document.createElement("div");
-    title.className = "phase-title";
-    title.textContent = phase.title || `Phase ${phaseIdx + 1}`;
-    meta.appendChild(title);
-    if (phase.duration) {
-      const dur = document.createElement("div");
-      dur.className = "phase-duration";
-      dur.textContent = phase.duration;
-      meta.appendChild(dur);
-    }
-    header.appendChild(meta);
-
-    const progress = document.createElement("div");
-    progress.className = "phase-progress";
-    progress.textContent = label;
-    header.appendChild(progress);
-
-    card.appendChild(header);
-
-    // Body
-    const body = document.createElement("div");
-    body.className = "phase-body";
-
-    if (phase.description) {
-      const desc = document.createElement("div");
-      desc.className = "phase-desc";
-      desc.textContent = phase.description;
-      body.appendChild(desc);
-    }
-
-    // Tasks
-    const tasksContainer = document.createElement("div");
-    tasksContainer.className = "tasks";
-
-    (phase.tasks || []).forEach((task, taskIdx) => {
-      const taskEl = document.createElement("div");
-      taskEl.className = "task";
-      taskEl.dataset.phase = phaseIdx;
-      taskEl.dataset.task = taskIdx;
-
-      // Checkbox
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.className = "task-check";
-      taskEl.appendChild(checkbox);
-
-      // Drag handle
-      const handle = document.createElement("span");
-      handle.className = "task-handle";
-      handle.title = "Drag to reorder";
-      handle.textContent = "⋮⋮";
-      taskEl.appendChild(handle);
-
-      // Task text
-      const taskText = document.createElement("span");
-      taskText.className = "task-text";
-      taskText.contentEditable = "false";
-      taskText.textContent = task;
-      taskEl.appendChild(taskText);
-
-      // Actions
-      const actions = document.createElement("div");
-      actions.className = "task-actions";
-
-      // Edit button
-      const editBtn = document.createElement("button");
-      editBtn.className = "task-btn task-edit-btn";
-      editBtn.title = "Edit task";
-      editBtn.textContent = "✏️";
-      actions.appendChild(editBtn);
-
-      // Copy button
-      const copyBtn = document.createElement("button");
-      copyBtn.className = "task-btn task-copy-btn";
-      copyBtn.title = "Copy task";
-      copyBtn.textContent = "📋";
-      actions.appendChild(copyBtn);
-
-      // Tooltip toggle
-      const tooltipToggle = document.createElement("span");
-      tooltipToggle.className = "task-btn task-tooltip-toggle";
-      tooltipToggle.title = "Show tip";
-      tooltipToggle.textContent = "ⓘ";
-
-      // Tooltip
-      const tooltip = document.createElement("div");
-      tooltip.className = "task-tooltip";
-      tooltip.style.display = "none";
-      tooltip.textContent = "💡 " + generateTaskTip(task, phase);
-
-      actions.appendChild(tooltipToggle);
-      actions.appendChild(tooltip);
-      taskEl.appendChild(actions);
-
-      tasksContainer.appendChild(taskEl);
-    });
-
-    body.appendChild(tasksContainer);
-
-    if (phase.milestone) {
-      const milestone = document.createElement("div");
-      milestone.className = "milestone";
-      const strong = document.createElement("strong");
-      strong.textContent = "Milestone:";
-      milestone.appendChild(strong);
-      milestone.appendChild(document.createTextNode(" " + phase.milestone));
-      body.appendChild(milestone);
-    }
-
-    card.appendChild(body);
-    container.appendChild(card);
-  });
-
-  // Show overall progress
-  const progressContainer = document.getElementById("overall-progress-container");
-  if (progressContainer) {
-    progressContainer.style.display = "block";
-    updateOverallProgress();
-  }
-
-  section.style.display = "block";
-
-  setTimeout(() => {
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 100);
+function renderSidebar() {
+  const container = document.getElementById("roadmap-diagram");
+  const sidebar = document.createElement("div");
+  sidebar.style.cssText = "position: absolute; top: 0; left: 0; width: 220px; z-index: 10; padding: 2rem; border: var(--border-width) solid var(--border); background: #fff; box-shadow: var(--shadow); border-radius: 12px;";
+  sidebar.innerHTML = `
+    <div style="font-family: var(--sans); font-weight: 900; font-size: 1rem; margin-bottom: 1rem; color: var(--text); text-transform: uppercase;">Knowledge Map</div>
+    <ul style="list-style: none; font-size: 13px; font-weight: 700; color: var(--muted); line-height: 2.2;">
+      <li>● Click nodes for Studio</li>
+      <li>● Save personal references</li>
+      <li>● Track learning status</li>
+    </ul>
+  `;
+  container.appendChild(sidebar);
 }
 
-function togglePhaseCollapsed(phaseCard) {
-  phaseCard.classList.toggle("collapsed");
+function escHtml(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function toggleTaskCompleted(taskEl) {
-  const checkbox = taskEl.querySelector(".task-check");
-  taskEl.classList.toggle("completed", checkbox.checked);
-  updateOverallProgress();
+function escAttr(str) {
+  return "'" + String(str).replace(/'/g, "&#39;") + "'";
 }
-
-function enableTaskEdit(taskTextEl, phaseIdx, taskIdx) {
-  const currentText = taskTextEl.textContent;
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = currentText;
-  input.className = "edit-input";
-  input.style.cssText = "width: 100%; font: inherit; padding: 4px; border: 1px solid var(--accent); border-radius: 4px; background: var(--surface2); color: var(--text); outline: none; box-sizing: border-box;";
-  taskTextEl.replaceWith(input);
-  input.focus();
-  input.select();
-  const saveEdit = () => {
-    const newText = input.value.trim() || currentText;
-    const newSpan = document.createElement("span");
-    newSpan.className = "task-text";
-    newSpan.contentEditable = "false";
-    newSpan.textContent = newText;
-    input.replaceWith(newSpan);
-    if (currentRoadmap && currentRoadmap.phases && currentRoadmap.phases[phaseIdx]) {
-      currentRoadmap.phases[phaseIdx].tasks[taskIdx] = newText;
-    }
-    showToast("Task updated");
-  };
-  input.addEventListener("blur", saveEdit);
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      input.blur();
-    } else if (e.key === "Escape") {
-      input.value = currentText;
-      input.blur();
-    }
-  });
-}
-
-function copyTaskText(btn) {
-  const taskEl = btn.closest(".task");
-  const text = taskEl.querySelector(".task-text").textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Task copied!");
-  }).catch(err => {
-    showToast("Failed to copy");
-    console.error(err);
-  });
-}
-
-function showTaskTooltip(toggleBtn) {
-  const tooltip = toggleBtn.closest(".task-actions").querySelector(".task-tooltip");
-  if (tooltip) {
-    const isVisible = tooltip.style.display === "block";
-    tooltip.style.display = isVisible ? "none" : "block";
-    if (!isVisible) {
-      setTimeout(() => {
-        tooltip.style.display = "none";
-      }, 3000);
-    }
-  }
-}
-
-function startTaskDrag(e) {
-  const taskEl = e.target.closest(".task");
-  if (!taskEl) return;
-  taskEl.classList.add("dragging");
-  e.dataTransfer.setData("text/plain", `${taskEl.dataset.phase}-${taskEl.dataset.task}`);
-  e.dataTransfer.effectAllowed = "move";
-  window.draggedTask = taskEl;
-}
-
-function handleTaskDrop(e) {
-  e.preventDefault();
-  const targetTask = e.target.closest(".task");
-  if (!targetTask || !window.draggedTask) return;
-  const dragged = window.draggedTask;
-  if (dragged === targetTask) return;
-  const fromPhase = parseInt(dragged.dataset.phase);
-  const fromTask = parseInt(dragged.dataset.task);
-  const toPhase = parseInt(targetTask.dataset.phase);
-  const toTask = parseInt(targetTask.dataset.task);
-  reorderTask(fromPhase, fromTask, toPhase, toTask);
-  dragged.classList.remove("dragging");
-  window.draggedTask = null;
-}
-
-function reorderTask(fromPhaseIdx, fromTaskIdx, toPhaseIdx, toTaskIdx) {
-  const container = document.getElementById("phases-container");
-  const draggedEl = container.querySelector(`.task[data-phase="${fromPhaseIdx}"][data-task="${fromTaskIdx}"]`);
-  const targetEl = container.querySelector(`.task[data-phase="${toPhaseIdx}"][data-task="${toTaskIdx}"]`);
-  if (!draggedEl || !targetEl) return;
-
-  // Determine insertion position: after if target is after or in later phase, else before
-  if (toTaskIdx > fromTaskIdx || toPhaseIdx > fromPhaseIdx) {
-    targetEl.after(draggedEl);
-  } else {
-    targetEl.before(draggedEl);
-  }
-
-  // Update data in currentRoadmap
-  if (currentRoadmap && currentRoadmap.phases) {
-    const fromPhase = currentRoadmap.phases[fromPhaseIdx];
-    const toPhase = currentRoadmap.phases[toPhaseIdx];
-    const [movedTask] = fromPhase.tasks.splice(fromTaskIdx, 1);
-    // Adjust target index if moving within same phase and target after original
-    let adjustedToTaskIdx = toTaskIdx;
-    if (fromPhaseIdx === toPhaseIdx && toTaskIdx > fromTaskIdx) {
-      adjustedToTaskIdx = toTaskIdx - 1;
-    }
-    toPhase.tasks.splice(adjustedToTaskIdx, 0, movedTask);
-    updateDataAttributes();
-    showToast("Task reordered");
-  }
-}
-
-function updateDataAttributes() {
-  const container = document.getElementById("phases-container");
-  const phaseCards = container.querySelectorAll(".phase-card");
-  phaseCards.forEach((card, phaseIdx) => {
-    card.dataset.phaseIndex = phaseIdx;
-    const tasks = card.querySelectorAll(".task");
-    tasks.forEach((task, taskIdx) => {
-      task.dataset.phase = phaseIdx;
-      task.dataset.task = taskIdx;
-    });
-  });
-}
-
-// Initialize event listeners
-(function initInteractions() {
-  const container = document.getElementById("phases-container");
-  if (!container) return;
-
-  // Phase collapse
-  container.addEventListener("click", e => {
-    const header = e.target.closest(".phase-header");
-    if (header) {
-      const card = header.closest(".phase-card");
-      if (card) card.classList.toggle("collapsed");
-    }
-  });
-
-  // Checkbox change
-  container.addEventListener("change", e => {
-    if (e.target.classList.contains("task-check")) {
-      const taskEl = e.target.closest(".task");
-      if (taskEl) toggleTaskCompleted(taskEl);
-    }
-  });
-
-  // Copy button
-  container.addEventListener("click", e => {
-    if (e.target.classList.contains("task-copy-btn")) {
-      copyTaskText(e.target);
-    }
-  });
-
-  // Edit button
-  container.addEventListener("click", e => {
-    if (e.target.classList.contains("task-edit-btn")) {
-      const taskEl = e.target.closest(".task");
-      if (taskEl) {
-        const phaseIdx = parseInt(taskEl.dataset.phase);
-        const taskIdx = parseInt(taskEl.dataset.task);
-        const taskTextEl = taskEl.querySelector(".task-text");
-        enableTaskEdit(taskTextEl, phaseIdx, taskIdx);
-      }
-    }
-  });
-
-  // Tooltip toggle
-  container.addEventListener("click", e => {
-    if (e.target.classList.contains("task-tooltip-toggle")) {
-      showTaskTooltip(e.target);
-    }
-  });
-
-  // Double-click edit
-  container.addEventListener("dblclick", e => {
-    if (e.target.classList.contains("task-text")) {
-      const taskEl = e.target.closest(".task");
-      if (taskEl) {
-        const phaseIdx = parseInt(taskEl.dataset.phase);
-        const taskIdx = parseInt(taskEl.dataset.task);
-        enableTaskEdit(e.target, phaseIdx, taskIdx);
-      }
-    }
-  });
-
-  // Drag and drop
-  container.addEventListener("mousedown", e => {
-    if (e.target.classList.contains("task-handle")) {
-      startTaskDrag(e);
-    }
-  });
-
-  container.addEventListener("dragover", e => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  });
-
-  container.addEventListener("drop", handleTaskDrop);
-
-  // Close tooltips on outside click
-  document.addEventListener("click", e => {
-    if (!e.target.closest(".task-tooltip-toggle")) {
-      const tooltips = container.querySelectorAll(".task-tooltip[style*='display: block']");
-      tooltips.forEach(t => t.style.display = "none");
-    }
-  });
-})();
-
-// ─── Save & History ───────────────────────────────────────────────────────────
-async function saveRoadmap(topic, data) {
-  if (!currentUser) return;
-  const public_id = crypto.randomUUID();
-
-  const { error } = await db.from("roadmaps").insert({
-    user_id: currentUser.id,
-    topic,
-    data,
-    public_id,
-    is_public: true,
-  });
-
-  if (!error) {
-    showToast(`Saved! Share: ${location.origin}/r/${public_id}`);
-  }
-}
-
-async function toggleHistory() {
-  const section = document.getElementById("history-section");
-  if (section.style.display === "block") {
-    section.style.display = "none";
-    return;
-  }
-  if (!currentUser) return showToast("Sign in to see your history");
-  await loadHistory();
-}
-
-async function loadHistory() {
-  const { data, error } = await db
-    .from("roadmaps")
-    .select("*")
-    .eq("user_id", currentUser.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  const section = document.getElementById("history-section");
-  const grid = document.getElementById("history-grid");
-
-  if (error || !data?.length) {
-    grid.innerHTML = `<p style="color:var(--muted);font-size:14px;">No roadmaps yet — generate your first one above.</p>`;
-  } else {
-    grid.innerHTML = data.map(r => `
-      <div class="history-item" onclick="loadSavedRoadmap(${escAttr(JSON.stringify(r))})">
-        <div class="history-topic">${escHtml(r.topic)}</div>
-        <div class="history-meta">${new Date(r.created_at).toLocaleDateString()}</div>
-        ${r.public_id ? `<a class="history-share" href="/r/${r.public_id}" onclick="event.stopPropagation()" target="_blank">View public link ↗</a>` : ""}
-      </div>
-    `).join("");
-  }
-
-  section.style.display = "block";
-  section.scrollIntoView({ behavior: "smooth" });
-}
-
-function loadSavedRoadmap(record) {
-  currentRoadmap = record.data;
-  currentTopic = record.topic;
-  document.getElementById("topic").value = record.topic;
-  renderRoadmap(record.topic, record.data);
-  document.getElementById("history-section").style.display = "none";
-}
-
-// ─── Share ────────────────────────────────────────────────────────────────────
-async function copyShareLink() {
-  if (!currentRoadmap) return showToast("Generate a roadmap first");
-
-  // Try to find most recent saved public_id
-  if (currentUser) {
-    const { data } = await db.from("roadmaps")
-      .select("public_id")
-      .eq("user_id", currentUser.id)
-      .eq("topic", currentTopic)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (data?.[0]?.public_id) {
-      const url = `${location.origin}/r/${data[0].public_id}`;
-      await navigator.clipboard.writeText(url).catch(() => {});
-      return showToast("Link copied to clipboard ✓");
-    }
-  }
-  showToast("Sign in to get a shareable link");
-}
-
-// ─── PDF Export (FIXED: multi-page with proper wrapping) ──────────────────────
-function downloadPDF() {
-  if (!currentRoadmap) return showToast("Generate a roadmap first");
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = 20;
-  const maxW = pageW - margin * 2;
-  let y = margin;
-  const LINE_HEIGHT = 14; // Fixed line height for consistent spacing
-
-  // Phase color palette (matching UI colors)
-  const phaseColors = [
-    [200, 240, 96],
-    [96, 212, 240],
-    [240, 160, 96],
-    [176, 96, 240]
-  ];
-
-  function checkPage(needed = 10) {
-    if (y + needed > pageH - margin) {
-      doc.addPage();
-      // Fill new page with dark background
-      doc.setFillColor(13, 13, 15);
-      doc.rect(0, 0, pageW, pageH, "F");
-      y = margin;
-    }
-  }
-
-  function writeLine(text, size = 11, style = "normal", color = [30, 30, 30]) {
-    doc.setFontSize(size);
-    doc.setFont("times", style);
-    doc.setTextColor(...color);
-    const lines = doc.splitTextToSize(String(text), maxW);
-    const lh = size * 1.3; // Dynamic line height based on font size
-    checkPage(lines.length * lh);
-    doc.text(lines, margin, y, { lineHeight: lh });
-    y += lines.length * lh;
-  }
-
-  // Title page - centered with border
-  doc.setFillColor(13, 13, 15);
-  doc.rect(0, 0, pageW, pageH, "F");
-  // Page border
-  doc.setDrawColor(20, 20, 23);
-  doc.setLineWidth(1);
-  doc.rect(margin, margin, pageW - margin * 2, pageH - margin * 2);
-  const centerX = pageW / 2;
-  const startY = pageH * 0.4;
-  doc.setTextColor(200, 240, 96);
-  doc.setFont("times", "bold");
-  doc.setFontSize(34);
-  doc.text("Pathfinder", centerX, startY, { align: "center" });
-  doc.setTextColor(240, 237, 232);
-  doc.setFontSize(20);
-  doc.text(doc.splitTextToSize(currentTopic, maxW), centerX, startY + 30, { align: "center" });
-  doc.setTextColor(122, 120, 128);
-  doc.setFontSize(12);
-  doc.text("Learning Roadmap", centerX, startY + 60, { align: "center" });
-  doc.text(`Generated ${new Date().toLocaleDateString()}`, centerX, pageH - 30, { align: "center" });
-
-  // Content pages
-  doc.addPage();
-  // Fill entire content page with dark background
-  doc.setFillColor(13, 13, 15);
-  doc.rect(0, 0, pageW, pageH, "F");
-  y = margin;
-
-  // Get completed tasks from DOM
-  const completedCheckboxes = document.querySelectorAll('.task-check:checked');
-  const completedSet = new Set();
-  completedCheckboxes.forEach(cb => {
-    const phaseIdx = parseInt(cb.dataset.phaseIdx);
-    const taskIdx = parseInt(cb.dataset.taskIdx);
-    completedSet.add(`${phaseIdx}-${taskIdx}`);
-  });
-
-  writeLine(currentTopic, 24, "bold", [240, 237, 232]);
-  y += 8;
-
-  const phases = currentRoadmap.phases || [];
-  phases.forEach((phase, i) => {
-    checkPage(24);
-    y += 4;
-
-    // Phase header bar - dark surface with phase color accent
-    doc.setFillColor(20, 20, 23);
-    doc.roundedRect(margin, y - 4, maxW, 18, 2, 2, "F");
-    // Accent line on left
-    const phaseColor = phaseColors[i % phaseColors.length];
-    doc.setFillColor(...phaseColor);
-    doc.rect(margin, y - 4, 3, 18, "F");
-
-    // Phase number and title in light text
-    doc.setTextColor(240, 237, 232);
-    doc.setFont("times", "bold");
-    doc.setFontSize(14);
-    doc.text(`Phase ${i + 1}: ${phase.title || ""}`, margin + 10, y + 8);
-
-    // Duration in muted
-    if (phase.duration) {
-      doc.setFont("times", "italic");
-      doc.setFontSize(10);
-      doc.setTextColor(122, 120, 128);
-      doc.text(phase.duration, pageW - margin - 4, y + 8, { align: "right" });
-    }
-    y += 22;
-
-    if (phase.description) {
-      doc.setTextColor(200, 200, 200);
-      doc.setFontSize(11);
-      doc.setFont("times", "normal");
-      const descDims = doc.getTextDimensions(phase.description, { maxWidth: maxW, lineHeight: LINE_HEIGHT });
-      const needed = descDims.height + 4;
-      checkPage(needed);
-      doc.text(phase.description, margin, y, { maxWidth: maxW, lineHeight: LINE_HEIGHT });
-      y += needed;
-    }
-
-    (phase.tasks || []).forEach((task, taskIdx) => {
-      doc.setFont("times", "normal");
-      doc.setFontSize(11);
-      const textDims = doc.getTextDimensions(task, { maxWidth: maxW - 12, lineHeight: LINE_HEIGHT });
-      const needed = textDims.height + 2;
-      checkPage(needed);
-
-      const isCompleted = completedSet.has(`${i}-${taskIdx}`);
-
-      // Draw checkbox (square) with phase color outline
-      doc.setDrawColor(...phaseColor);
-      doc.setLineWidth(0.5);
-      doc.rect(margin - 2, y - 4, 6, 6, "S");
-      if (isCompleted) {
-        // Fill checkbox with phase color
-        doc.setFillColor(...phaseColor);
-        doc.rect(margin - 2, y - 4, 6, 6, "F");
-      }
-
-      // Task text in light gray
-      doc.setTextColor(240, 237, 232);
-      doc.text(task, margin + 8, y, { maxWidth: maxW - 12, lineHeight: LINE_HEIGHT });
-      y += needed;
-    });
-
-    if (phase.milestone) {
-      doc.setFont("times", "italic");
-      doc.setFontSize(10);
-      const milestoneText = "✓ " + phase.milestone;
-      const milestoneDims = doc.getTextDimensions(milestoneText, { maxWidth: maxW - 8, lineHeight: LINE_HEIGHT });
-      const needed = milestoneDims.height + 10;
-      checkPage(needed);
-      y += 2;
-      // Dark milestone box with phase color border
-      doc.setDrawColor(...phaseColor);
-      doc.setLineWidth(0.5);
-      doc.roundedRect(margin, y - 4, maxW, milestoneDims.height + 6, 2, 2, "S");
-      doc.setTextColor(200, 240, 96);
-      doc.text(milestoneText, margin + 4, y, { maxWidth: maxW - 8, lineHeight: LINE_HEIGHT });
-      y += milestoneDims.height + 8;
-    }
-  });
-
-  // Add headers and footers to all content pages (page 2 and beyond)
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 2; p <= totalPages; p++) {
-    doc.setPage(p);
-    // Header: topic and page number
-    doc.setFont("times", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(122, 120, 128);
-    doc.text(currentTopic, margin, 12);
-    doc.text(`Page ${p - 1} of ${totalPages - 1}`, pageW - margin, 12, { align: "right" });
-    // Footer: generation date and brand
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Generated ${new Date().toLocaleDateString()} by Pathfinder`, pageW / 2, pageH - 10, { align: "center" });
-    // Thin separator line
-    doc.setDrawColor(30, 30, 35);
-    doc.setLineWidth(0.3);
-    doc.line(margin, 18, pageW - margin, 18);
-  }
-
-  doc.save(`roadmap-${currentTopic.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}.pdf`);
-}
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-let progressInterval = null;
 
 function showLoading(on) {
-  const loadingEl = document.getElementById("loading");
-  const progressBar = document.getElementById("progress-bar");
-  const progressPercent = document.getElementById("progress-percent");
-  const loadingText = document.getElementById("loading-text");
-
-  if (on) {
-    loadingEl.style.display = "block";
-    let progress = 0;
-
-    // Reset UI
-    if (progressBar) progressBar.style.width = "0%";
-    if (progressPercent) progressPercent.textContent = "0%";
-    if (loadingText) loadingText.textContent = "Connecting to AI...";
-
-    // Progress stages
-    const stages = [
-      { progress: 20, text: "Analyzing your topic..." },
-      { progress: 35, text: "Structuring learning phases..." },
-      { progress: 50, text: "Generating tasks..." },
-      { progress: 70, text: "Refining roadmap..." },
-      { progress: 85, text: "Finalizing..." }
-    ];
-    let stageIndex = 0;
-
-    // Simulate progress
-    progressInterval = setInterval(() => {
-      // Update stage text
-      if (stageIndex < stages.length && progress >= stages[stageIndex].progress) {
-        if (loadingText) loadingText.textContent = stages[stageIndex].text;
-        stageIndex++;
-      }
-
-      // Increment progress (slower as it approaches 90%)
-      if (progress < 85) {
-        progress += Math.random() * 2 + 0.5;
-      } else if (progress < 90) {
-        progress += 0.3;
-      }
-
-      if (progress > 90) progress = 90;
-
-      if (progressBar) progressBar.style.width = progress + "%";
-      if (progressPercent) progressPercent.textContent = Math.round(progress) + "%";
-    }, 80);
-  } else {
-    // Complete progress
-    if (progressBar) progressBar.style.width = "100%";
-    if (progressPercent) progressPercent.textContent = "100%";
-    if (loadingText) loadingText.textContent = "Complete!";
-
-    clearInterval(progressInterval);
-    progressInterval = null;
-
-    // Hide after brief delay
-    setTimeout(() => {
-      loadingEl.style.display = "none";
-      if (progressBar) progressBar.style.width = "0%";
-      if (progressPercent) progressPercent.textContent = "0%";
-    }, 400);
-  }
+  document.getElementById("loading").style.display = on ? "block" : "none";
 }
 
 function showError(msg) {
   const el = document.getElementById("error-bar");
-  el.textContent = msg;
-  el.style.display = "block";
+  el.textContent = msg; el.style.display = "block";
 }
 
 function hideError() {
@@ -867,24 +367,41 @@ function hideError() {
 
 function showToast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
+  t.textContent = msg; t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 3500);
 }
 
-function escHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+async function saveRoadmap(topic, data) {
+  if (!currentUser) return;
+  const { error } = await db.from("roadmaps").upsert({
+    user_id: currentUser.id,
+    topic,
+    data,
+    is_public: true
+  }, { onConflict: 'user_id, topic' });
+  if (!error) showToast("Knowledge saved");
 }
 
-function escAttr(str) {
-  return "'" + String(str).replace(/'/g, "&#39;") + "'";
+async function loadHistory() {
+  const { data } = await db.from("roadmaps").select("*").eq("user_id", currentUser.id).order("created_at", { ascending: false });
+  const grid = document.getElementById("history-grid");
+  if (!data?.length) { grid.innerHTML = "<p>No maps yet</p>"; } else {
+    grid.innerHTML = data.map(r => `<div class="history-item" onclick='loadSavedRoadmap(${JSON.stringify(r)})'>${escHtml(r.topic)}</div>`).join("");
+  }
 }
 
-// Allow Enter key to generate
-document.getElementById("topic").addEventListener("keydown", e => {
-  if (e.key === "Enter") generate();
-});
+function loadSavedRoadmap(record) {
+  currentRoadmap = record.data;
+  currentTopic = record.topic;
+  renderRoadmap(record.topic, record.data);
+}
+
+function generateTaskTip(task, phase) {
+  return "Focus on understanding the core concepts of " + task;
+}
+
+function toggleHistory() {
+  const s = document.getElementById("history-section");
+  s.style.display = s.style.display === "block" ? "none" : "block";
+  if (s.style.display === "block") loadHistory();
+}
