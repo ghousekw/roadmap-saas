@@ -1,42 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pathfinder — AI Roadmap Generator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <style>
     :root {
-      --bg: #FBFBF9;
-      --surface: #ffffff;
-      --surface2: #f3f4f6;
-      --border: #1C293C;
-      --border-width: 2.5px;
-      --text: #1C293C;
-      --muted: #4b5563;
-      --accent: #FDC800; /* Primary */
-      --secondary: #432DD7;
-      --success: #16A34A;
-      --warning: #D97706;
-      --danger: #DC2626;
-      --shadow: 4px 4px 0px #1C293C;
-      --shadow-lg: 8px 8px 0px #1C293C;
-      
-      --phase-1: #FDC800;
-      --phase-2: #432DD7;
-      --phase-3: #16A34A;
-      --phase-4: #D97706;
+      --bg: #E7E5E4;
+      --surface: #E7E5E4;
+      --surface2: #E1DFDE;
+      --border: #D1D5DB;
+      --border-width: 0px;
+      --text: #1E293B;
+      --muted: #64748B;
+      --accent: #006666;
+      /* Neumorphism Club Teal */
+      --secondary: #F1F2F5;
+      --success: #00A63D;
+      --warning: #FE9900;
+      --danger: #FF2157;
 
-      --serif: 'DM Serif Display', serif;
-      --sans: 'Inter', sans-serif;
+      /* Neumorphic Shadow Tokens */
+      --shadow-out: 8px 8px 16px #cac8c7, -8px -8px 16px #ffffff;
+      --shadow-in: inset 6px 6px 12px #cac8c7, inset -6px -6px 12px #ffffff;
+      --shadow-sm: 4px 4px 8px #cac8c7, -4px -4px 8px #ffffff;
+
+      --display: 'Space Mono', monospace;
+      --sans: 'Space Mono', monospace;
       --mono: 'JetBrains Mono', monospace;
+
+      --radius: 16px;
     }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -48,328 +62,759 @@
     /* NOISE OVERLAY */
     body::before {
       content: '';
-      position: fixed; inset: 0;
+      position: fixed;
+      inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none; z-index: 0; opacity: 0.2;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.2;
     }
 
     /* NAV */
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       padding: 1rem 2rem;
       background: var(--bg);
-      border-bottom: var(--border-width) solid var(--border);
     }
-    .logo { font-family: var(--sans); font-weight: 800; font-size: 1.5rem; color: var(--text); text-transform: uppercase; letter-spacing: -0.05em; }
-    .logo span { background: var(--accent); padding: 2px 6px; border: var(--border-width) solid var(--border); box-shadow: 2px 2px 0px var(--border); margin-left: 4px; }
-    
-    .nav-right { display: flex; align-items: center; gap: 12px; }
-    .btn { 
-      display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; 
-      border-radius: 4px; font-size: 14px; font-weight: 700; cursor: pointer; 
-      transition: transform 0.1s, box-shadow 0.1s; 
-      border: var(--border-width) solid var(--border); background: #fff; color: var(--text);
-      box-shadow: var(--shadow);
+
+    .logo {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--text);
+      letter-spacing: -0.05em;
       text-transform: uppercase;
     }
-    .btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0px var(--border); }
-    .btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px var(--border); }
-    
-    .btn-accent { background: var(--accent); }
-    #user-email { font-size: 12px; color: var(--muted); font-family: var(--mono); font-weight: 600; }
+
+    .logo span {
+      background: var(--bg);
+      padding: 4px 12px;
+      box-shadow: var(--shadow-sm);
+      border-radius: 8px;
+      color: var(--accent);
+      margin-left: 8px;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+      font-family: var(--display);
+      text-transform: uppercase;
+    }
+
+    .btn:hover {
+      box-shadow: var(--shadow-out);
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      box-shadow: var(--shadow-in);
+      transform: translateY(0px);
+    }
+
+    .btn-accent {
+      background: var(--accent);
+    }
+
+    #user-email {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-weight: 600;
+    }
 
     /* HERO */
     .hero {
-      min-height: 90vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      text-align: center; padding: 8rem 2rem 4rem;
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8rem 2rem 4rem;
       position: relative;
     }
+
     .hero-glow {
-      position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
-      width: 600px; height: 300px;
-      background: radial-gradient(ellipse, rgba(253,200,0,0.1) 0%, transparent 70%);
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      background: radial-gradient(ellipse, rgba(253, 200, 0, 0.1) 0%, transparent 70%);
       pointer-events: none;
     }
+
     .eyebrow {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-family: var(--mono); font-size: 12px; font-weight: 800; color: var(--text);
-      background: #fff; border: var(--border-width) solid var(--border);
-      padding: 6px 16px; margin-bottom: 2rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text);
+      background: #fff;
+      border: var(--border-width) solid var(--border);
+      padding: 6px 16px;
+      margin-bottom: 2rem;
       box-shadow: var(--shadow);
     }
+
     h1 {
-      font-size: clamp(3rem, 8vw, 6rem);
-      line-height: 0.9; letter-spacing: -0.04em; font-weight: 900;
-      color: var(--text); margin-bottom: 1.5rem; text-transform: uppercase;
+      font-family: var(--display);
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      line-height: 1.1;
+      letter-spacing: -0.05em;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2rem;
+      text-transform: uppercase;
     }
-    h1 em { font-style: normal; -webkit-text-stroke: 2px var(--border); color: transparent; }
+
+    h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
     .hero-sub {
-      font-size: 1.25rem; font-weight: 500; color: var(--muted); max-width: 540px;
-      margin-bottom: 3rem; line-height: 1.4;
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--muted);
+      max-width: 600px;
+      margin-bottom: 3.5rem;
+      line-height: 1.6;
+      font-family: var(--sans);
     }
 
     /* INPUT AREA */
     .input-card {
-      background: #fff;
-      border: var(--border-width) solid var(--border);
-      padding: 2.5rem;
-      width: 100%; max-width: 640px;
-      box-shadow: var(--shadow-lg);
+      background: var(--bg);
+      padding: 3rem;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: var(--shadow-out);
+      border-radius: 20px;
     }
-    .input-row { display: flex; gap: 12px; margin-bottom: 16px; }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
     .input-field {
-      flex: 1; background: #fff; border: var(--border-width) solid var(--border);
-      padding: 14px 18px;
-      font-size: 16px; font-weight: 600; color: var(--text); font-family: var(--sans);
-      outline: none; box-shadow: inset 2px 2px 0px rgba(0,0,0,0.05);
+      flex: 1;
+      background: var(--bg);
+      border: none;
+      padding: 16px 20px;
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--text);
+      font-family: var(--sans);
+      outline: none;
+      box-shadow: var(--shadow-in);
+      border-radius: 12px;
     }
-    .input-field:focus { background: var(--bg); }
-    
+
     .generate-btn {
-      width: 100%; padding: 16px; 
-      background: var(--secondary); color: #fff;
-      border: var(--border-width) solid var(--border); 
-      font-size: 18px; font-weight: 800;
-      font-family: var(--sans); cursor: pointer;
-      transition: all 0.1s; box-shadow: var(--shadow);
-      text-transform: uppercase; letter-spacing: 0.05em;
+      width: 100%;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--accent);
+      border: none;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--display);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-sm);
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
     }
-    .generate-btn:hover { transform: translate(-3px, -3px); box-shadow: 7px 7px 0px var(--border); }
-    .generate-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0px var(--border); }
+
+    .generate-btn:hover {
+      box-shadow: var(--shadow-out);
+      transform: translateY(-2px);
+    }
+
+    .generate-btn:active {
+      box-shadow: var(--shadow-in);
+      transform: translateY(0px);
+    }
 
     /* ERROR */
     .error-bar {
-      display: none; background: #fee2e2; border: var(--border-width) solid var(--border);
-      padding: 12px 16px; margin-top: 16px;
-      font-size: 14px; font-weight: 700; color: var(--danger);
+      display: none;
+      background: #fee2e2;
+      border: var(--border-width) solid var(--border);
+      padding: 12px 16px;
+      margin-top: 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--danger);
       box-shadow: 3px 3px 0px var(--border);
     }
 
     /* LOADING */
     .loading {
-      display: none; text-align: center; padding: 2rem 0;
+      display: none;
+      text-align: center;
+      padding: 2rem 0;
     }
+
     .spinner {
-      width: 48px; height: 48px; margin: 0 auto 1.5rem;
-      border: var(--border-width) solid var(--border);
-      border-top-color: var(--accent);
-      animation: spin 0.6s linear infinite;
-      box-shadow: 4px 4px 0px var(--border);
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 1.5rem;
+      box-shadow: var(--shadow-sm);
+      border-radius: 50%;
+      border-top: 4px solid var(--accent);
+      animation: spin 1s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-text { font-weight: 800; text-transform: uppercase; font-size: 14px; margin-bottom: 1rem; }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-text {
+      font-family: var(--display);
+      font-weight: 500;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      color: var(--muted);
+    }
+
     .progress-container {
-      width: 100%; height: 24px; background: #fff;
-      border: var(--border-width) solid var(--border);
-      box-shadow: 4px 4px 0px var(--border);
-      overflow: hidden; margin-bottom: 0.75rem;
+      width: 100%;
+      height: 20px;
+      background: var(--bg);
+      box-shadow: var(--shadow-in);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 1rem;
     }
+
     .progress-bar {
-      height: 100%; width: 0%; background: var(--accent);
-      border-right: var(--border-width) solid var(--border);
       transition: width 0.3s ease;
     }
-    .progress-percent { font-family: var(--mono); font-size: 14px; font-weight: 900; }
+
+    .progress-percent {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
 
     /* INTERACTIVE TASKS */
-    .node-task { 
-      width: 360px !important; 
-      padding: 18px 22px; 
-      border-radius: 8px;
-    }
-    .node-task.done { 
-      background: #fdfdfc; 
-      border-style: dashed; 
-      opacity: 0.9;
-    }
-    .node-task.done .task-text { 
-      color: var(--muted);
-      text-decoration: line-through;
-    }
-    
-    .node-task:hover .task-btn {
-      background: var(--accent);
-      box-shadow: 4px 4px 0px var(--border);
+    .node-task {
+      width: 400px !important;
+      padding: 0;
+      border-radius: 20px;
+      box-shadow: var(--shadow-sm);
+      background: var(--bg);
+      border: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
-    .node-done-badge {
-      position: absolute;
-      top: -12px;
-      right: -12px;
-      background: var(--success);
-      color: white;
-      font-size: 10px;
-      padding: 4px 8px;
-      border: var(--border-width) solid var(--border);
-      font-weight: 900;
-      box-shadow: 3px 3px 0px var(--border);
-      z-index: 10;
+    .task {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
     }
-    
-    .connector-path {
-      fill: none;
-      stroke: var(--border);
-      stroke-width: 2.5;
-      stroke-linecap: round;
+
+    .task-handle {
+      padding: 12px 24px 0;
+      color: var(--muted);
+      font-size: 18px;
+      opacity: 0.5;
+    }
+
+    .task-body {
+      padding: 8px 24px 20px;
+      flex: 1;
+    }
+
+    .task-text {
+      font-size: 14px;
+      line-height: 1.5;
+      font-weight: 500;
+      display: block;
+    }
+
+    .task-footer {
+      padding: 16px 24px;
+      background: var(--surface2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .dive-action-btn {
+      background: var(--bg);
+      border: none;
+      box-shadow: var(--shadow-sm);
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-family: var(--display);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .dive-action-btn:hover {
+      box-shadow: var(--shadow-out);
+    }
+
+    .dive-action-btn:active {
+      box-shadow: var(--shadow-in);
+    }
+
+    .task-btn {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
       opacity: 0.8;
     }
-    .connector-path.dotted {
-      stroke-dasharray: 8 8;
-      stroke: var(--muted);
+
+    .task-btn:hover {
+      color: var(--accent);
+      opacity: 1;
     }
+
+    .connector-path {
+      fill: none;
+      stroke: var(--muted);
+      stroke-width: 2;
+      stroke-linecap: round;
+      opacity: 0.4;
+    }
+
     .connector-path.spine {
-      stroke-width: 4;
-      stroke: var(--border);
+      stroke-width: 3;
+      stroke: var(--accent);
+      opacity: 0.6;
+    }
+
+    /* ROADMAP OUTPUT */
+    #output-section {
+      display: none;
+      padding: 6rem 2rem;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .output-header {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .output-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .output-label {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+      font-family: var(--mono);
+      text-transform: lowercase;
+    }
+
+    .output-topic {
+      font-size: 3rem;
+      font-weight: 700;
+      font-family: var(--display);
+      line-height: 1.1;
+      letter-spacing: -0.05em;
+      margin-top: 1rem;
+      color: var(--text);
+    }
+
+    .node-sub-task {
+      width: 180px !important;
+      padding: 0;
+      border-radius: 12px;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.05), -2px -2px 5px #ffffff;
+      background: var(--bg);
+      font-family: var(--sans);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     
-    /* ROADMAP OUTPUT */
-    #output-section { display: none; padding: 6rem 2rem; max-width: 1000px; margin: 0 auto; }
-    .output-header { display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 3rem; }
-    .output-actions { display: flex; gap: 12px; }
-    .output-label { font-size: 14px; font-weight: 800; color: var(--muted); text-transform: uppercase; font-family: var(--mono); }
-    .output-topic { font-size: 3.5rem; font-weight: 900; line-height: 1.2; letter-spacing: -0.04em; text-transform: uppercase; margin-top: 0.5rem; }
-    .output-topic span { display: inline-block; background: var(--accent); border: var(--border-width) solid var(--border); padding: 4px 16px; box-shadow: 6px 6px 0px var(--border); }
+    .sub-task { display: flex; flex-direction: column; height: 100%; }
+    .sub-task-text { padding: 10px 14px 6px; font-size: 10px; font-weight: 500; line-height: 1.3; flex: 1; }
+    
+    .sub-task-footer {
+      padding: 6px 14px;
+      background: rgba(0,0,0,0.01);
+      display: flex;
+      justify-content: flex-end;
+      border-top: 1px solid rgba(0,0,0,0.03);
+    }
+    
+    .sub-dive-btn {
+      font-size: 8px;
+      font-weight: 700;
+      color: var(--accent);
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .sub-dive-btn:hover { text-decoration: underline; }
+    
+    .node-sub-task.level-2 { opacity: 0.9; transform: scale(0.95); }
+    .node-sub-task.level-3 { opacity: 0.8; transform: scale(0.9); }
+
+    .connector-path.sub {
+      stroke: var(--accent);
+      stroke-width: 1.5;
+      opacity: 0.3;
+    }
+
+    .dive-pill {
+      background: var(--accent);
+      color: white;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .output-topic span {
+      display: inline-block;
+      background: var(--bg);
+      padding: 12px 32px;
+      box-shadow: var(--shadow-sm);
+      border-radius: 12px;
+      color: var(--accent);
+    }
 
     /* OVERALL PROGRESS */
     #overall-progress-container {
-      margin-bottom: 3rem; padding: 2rem;
-      background: #fff; border: var(--border-width) solid var(--border);
-      box-shadow: var(--shadow);
+      margin-bottom: 4rem;
+      padding: 2.5rem;
+      background: var(--bg);
+      box-shadow: var(--shadow-out);
+      border-radius: 20px;
     }
+
     .overall-progress-label {
-      font-weight: 900; text-transform: uppercase; font-size: 14px;
-      display: flex; justify-content: space-between; margin-bottom: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-family: var(--display);
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      color: var(--muted);
     }
 
     /* DIAGRAM & NODES */
-    #roadmap-diagram { 
-      margin-top: 4rem; 
-      position: relative; width: 100%; min-height: 800px;
+    #roadmap-diagram {
+      margin-top: 4rem;
+      position: relative;
+      width: 100%;
+      min-height: 800px;
     }
+
     .node {
       position: absolute;
       z-index: 2;
       box-sizing: border-box;
-      width: 320px; 
-      background: #fff; border: var(--border-width) solid var(--border);
-      padding: 16px 24px; box-shadow: var(--shadow);
-      transition: transform 0.1s, box-shadow 0.1s;
+      width: 320px;
+      background: var(--bg);
+      padding: 24px 32px;
+      box-shadow: var(--shadow-sm);
+      border-radius: 20px;
+      transition: all 0.2s ease;
     }
-    .node:hover { transform: translate(-3px, -3px); box-shadow: 7px 7px 0px var(--border); }
-    
-    .node-topic { background: var(--accent); }
-    .node-topic .node-title { font-weight: 900; text-transform: uppercase; font-size: 1.5rem; }
-    
-    .node-phase .node-title { font-weight: 800; font-size: 16px; text-transform: uppercase; }
-    .node-phase .node-meta { font-family: var(--mono); font-weight: 700; font-size: 11px; margin-top: 4px; }
+
+    .node:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-out);
+    }
+
+    .node-topic {
+      box-shadow: var(--shadow-out);
+    }
+
+    .node-topic .node-title {
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 1.25rem;
+      color: var(--accent);
+    }
+
+    .node-phase .node-title {
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .node-phase .node-meta {
+      font-family: var(--mono);
+      font-weight: 400;
+      font-size: 10px;
+      margin-top: 6px;
+      color: var(--muted);
+    }
 
     .diagram-svg {
       position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
       z-index: 1;
     }
-    .output-section { position: relative; }
+
+    .output-section {
+      position: relative;
+    }
+
     .connector-path.spine {
       stroke: #3b82f6;
       stroke-dasharray: none;
       stroke-width: 4;
     }
+
     .connector-path.active {
       stroke: var(--secondary);
     }
 
     /* WORKSPACE PANEL (KNOWLEDGE VAULT) */
     #task-workspace {
-      position: fixed; top: 0; right: -550px;
-      width: 520px; height: 100%;
-      background: var(--bg); border-left: var(--border-width) solid var(--border);
-      z-index: 1000; padding: 4rem 3rem;
-      transition: right 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67);
-      box-shadow: -15px 0 0px rgba(0,0,0,0.1);
+      position: fixed;
+      top: 20px;
+      right: -600px;
+      width: 520px;
+      height: calc(100% - 40px);
+      background: var(--bg);
+      z-index: 1000;
+      padding: 4rem 3rem;
+      transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: -20px 0 40px rgba(0, 0, 0, 0.05);
       overflow-y: auto;
+      border-radius: 30px 0 0 30px;
     }
-    #task-workspace.open { right: 0; box-shadow: -30px 0 0px var(--border); }
-    #workspace-title { font-size: 1.75rem; line-height: 1.2; font-weight: 900; word-wrap: break-word; }
-    
+
+    #task-workspace.open {
+      right: 0;
+      box-shadow: var(--shadow-out);
+    }
+
+    #workspace-title {
+      font-size: 1.75rem;
+      line-height: 1.2;
+      font-weight: 700;
+      font-family: var(--display);
+      color: var(--text);
+    }
+
     .workspace-section {
-      background: #fff; border: var(--border-width) solid var(--border);
-      padding: 1.5rem; margin-bottom: 2rem; box-shadow: 6px 6px 0px var(--border);
+      background: var(--bg);
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+      box-shadow: var(--shadow-sm);
+      border-radius: 20px;
     }
-    
+
     .timestamp-badge {
-      display: inline-block; padding: 4px 8px; background: var(--success); color: white;
-      font-size: 11px; font-weight: 900; font-family: var(--mono); text-transform: uppercase;
+      display: inline-block;
+      padding: 4px 8px;
+      background: var(--success);
+      color: white;
+      font-size: 11px;
+      font-weight: 900;
+      font-family: var(--mono);
+      text-transform: uppercase;
       border: 1px solid var(--border);
     }
-    
-    .add-link-form { display: flex; gap: 8px; }
-    
-    .remove-link-btn {
-      color: var(--danger); font-weight: 900; cursor: pointer; padding: 0 0.5rem; font-size: 1.2rem; margin-left: auto;
+
+    .add-link-form {
+      display: flex;
+      gap: 8px;
     }
 
-    .node-task.done { opacity: 0.7; background: #e5e7eb; border-style: dashed; }
-    .node-task.done .task-text { text-decoration: line-through; }
+    .remove-link-btn {
+      color: var(--danger);
+      font-weight: 900;
+      cursor: pointer;
+      padding: 0 0.5rem;
+      font-size: 1.2rem;
+      margin-left: auto;
+    }
+
+    .node-task.done {
+      opacity: 0.7;
+      background: #e5e7eb;
+      border-style: dashed;
+    }
+
+    .node-task.done .task-text {
+      text-decoration: line-through;
+    }
+
     .node-done-badge {
-      position: absolute; top: -10px; right: -10px; background: var(--success); color: white;
-      font-size: 10px; font-family: var(--mono); padding: 4px; border: 2px solid var(--border);
-      font-weight: 900; z-index: 5;
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: var(--success);
+      color: white;
+      font-size: 10px;
+      font-family: var(--mono);
+      padding: 4px;
+      border: 2px solid var(--border);
+      font-weight: 900;
+      z-index: 5;
     }
-    
+
     .resource-link {
-      display: flex; flex-direction: column; gap: 8px;
-      background: #fff; border: var(--border-width) solid var(--border);
-      padding: 1.75rem; margin-bottom: 1.5rem;
-      box-shadow: var(--shadow); transition: all 0.1s;
-      text-decoration: none; color: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--bg);
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 16px;
     }
-    .resource-link:hover { transform: translate(-4px, -4px); box-shadow: 8px 8px 0px var(--accent); }
-    .resource-link strong { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; }
-    .resource-link span { font-size: 14px; color: var(--muted); font-weight: 500; }
-    
-    .close-resource { position: absolute; top: 1.5rem; right: 1.5rem; font-size: 2rem; cursor: pointer; font-weight: 900; }
+
+    .resource-link:hover {
+      box-shadow: var(--shadow-out);
+      transform: translateY(-2px);
+    }
+
+    .resource-link strong {
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: var(--display);
+      color: var(--accent);
+    }
+
+    .resource-link span {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 400;
+      font-family: var(--sans);
+    }
+
+    .close-resource {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      font-size: 2rem;
+      cursor: pointer;
+      font-weight: 900;
+    }
 
     /* TYPOGRAPHY */
-    h2 { font-weight: 900; text-transform: uppercase; font-size: 2.5rem; letter-spacing: -0.02em; }
-    
-    .footer { font-family: var(--mono); font-weight: 700; padding: 4rem; text-align: center; border-top: var(--border-width) solid var(--border); background: #fff; }
+    h2 {
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 2.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .footer {
+      font-family: var(--mono);
+      font-weight: 700;
+      padding: 4rem;
+      text-align: center;
+      border-top: var(--border-width) solid var(--border);
+      background: #fff;
+    }
 
     @media (max-width: 600px) {
-      .output-topic { font-size: 2.5rem; }
+      .output-topic {
+        font-size: 2.5rem;
+      }
     }
   </style>
 </head>
+
 <body>
   <div id="task-workspace">
     <span class="close-resource" onclick="closeTaskWorkspace()">&times;</span>
     <p class="output-label">STUDY NODE</p>
     <h2 id="workspace-title" style="margin-bottom: 2rem;">Task Title</h2>
-    
+
     <div class="workspace-section">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
         <h3 style="font-size: 1.1rem; text-transform: uppercase;">Status</h3>
         <span id="workspace-timestamp" class="timestamp-badge" style="display:none;"></span>
       </div>
-      <button id="mark-done-btn" class="base-btn btn-primary" style="width: 100%; border-radius: 4px;" onclick="toggleTaskCompletion()">Mark as Learned ✓</button>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button id="mark-done-btn" class="btn" style="width: 100%;" onclick="toggleTaskCompletion()">Mark as Learned
+          ✓</button>
+        <button id="deep-dive-btn" class="btn"
+          style="width: 100%; border-radius: 12px; font-size: 12px; border: 1px dashed var(--accent);"
+          onclick="deepDive()">
+          Deep Dive Exploration ↓
+        </button>
+      </div>
+    </div>
+
+    <div class="workspace-section">
+      <h3 style="font-size: 1.1rem; text-transform: uppercase; margin-bottom: 0.5rem;">My Saved Links</h3>
+      <p style="color: var(--muted); font-size: 12px; margin-bottom: 1.5rem;">Save specific tutorials, articles, or
+        videos for your future reference.</p>
+      <div class="add-link-form">
+        <input type="url" id="custom-link-url" placeholder="Paste URL here..." class="base-btn"
+          style="flex:1; background: #fff; cursor: text;">
+        <button class="base-btn btn-secondary" onclick="addCustomLink()" style="padding: 0.5rem 1rem;">Save</button>
+      </div>
+      <div id="workspace-custom-resources" style="margin-top: 1rem;"></div>
     </div>
 
     <div class="workspace-section">
       <h3 style="font-size: 1.1rem; text-transform: uppercase; margin-bottom: 1.5rem;">Curated Guides</h3>
       <div id="workspace-ai-resources"></div>
-    </div>
-
-    <div class="workspace-section">
-      <h3 style="font-size: 1.1rem; text-transform: uppercase; margin-bottom: 0.5rem;">My Saved Links</h3>
-      <p style="color: var(--muted); font-size: 12px; margin-bottom: 1.5rem;">Save specific tutorials, articles, or videos for your future reference.</p>
-      <div class="add-link-form">
-        <input type="url" id="custom-link-url" placeholder="Paste URL here..." class="base-btn" style="flex:1; background: #fff; cursor: text;">
-        <button class="base-btn btn-secondary" onclick="addCustomLink()" style="padding: 0.5rem 1rem;">Save</button>
-      </div>
-      <div id="workspace-custom-resources" style="margin-top: 1rem;"></div>
     </div>
   </div>
 
@@ -377,79 +822,81 @@
     <div class="toast"></div>
   </template>
 
-<nav>
-  <div class="logo">Path<span>finder</span></div>
-  <div class="nav-right">
-    <span id="user-email"></span>
-    <button class="btn" id="auth-btn" onclick="handleAuth()">Sign in</button>
-    <button class="btn" onclick="toggleHistory()">History</button>
-  </div>
-</nav>
+  <nav>
+    <div class="logo">Path<span>finder</span></div>
+    <div class="nav-right">
+      <span id="user-email"></span>
+      <button class="btn" id="auth-btn" onclick="handleAuth()">Sign in</button>
+      <button class="btn" onclick="toggleHistory()">History</button>
+    </div>
+  </nav>
 
-<main>
-  <section class="hero">
-    <div class="hero-glow"></div>
-    <div class="eyebrow">AI-Powered Learning Roadmaps</div>
-    <h1>Master anything with<br>an <em>intelligent</em> roadmap</h1>
-    <p class="hero-sub">Enter any skill, topic, or goal. Get a structured, phase-by-phase learning path built by AI — ready to export and share.</p>
+  <main>
+    <section class="hero">
+      <div class="hero-glow"></div>
+      <div class="eyebrow">AI-Powered Learning Roadmaps</div>
+      <h1>Master anything with<br>an <em>intelligent</em> roadmap</h1>
+      <p class="hero-sub">Enter any skill, topic, or goal. Get a structured, phase-by-phase learning path built by AI —
+        ready to export and share.</p>
 
-    <div class="input-card">
-      <div class="input-row">
-        <input class="input-field" id="topic" placeholder="e.g. Learn Rust, Build a SaaS, Get into ML..." autocomplete="off"/>
-      </div>
-      <button class="generate-btn" id="gen-btn" onclick="generate()">Generate Roadmap →</button>
-      <div class="error-bar" id="error-bar"></div>
-      <div class="loading" id="loading">
-        <div class="loading-content">
-          <div class="loading-icon">
-            <div class="spinner"></div>
+      <div class="input-card">
+        <div class="input-row">
+          <input class="input-field" id="topic" placeholder="e.g. Learn Rust, Build a SaaS, Get into ML..."
+            autocomplete="off" />
+        </div>
+        <button class="generate-btn" id="gen-btn" onclick="generate()">Generate Roadmap →</button>
+        <div class="error-bar" id="error-bar"></div>
+        <div class="loading" id="loading">
+          <div class="loading-content">
+            <div class="loading-icon">
+              <div class="spinner"></div>
+            </div>
+            <div class="loading-text" id="loading-text">Building your roadmap...</div>
+            <div class="progress-container">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-percent" id="progress-percent">0%</div>
           </div>
-          <div class="loading-text" id="loading-text">Building your roadmap...</div>
-          <div class="progress-container">
-            <div class="progress-bar" id="progress-bar"></div>
-          </div>
-          <div class="progress-percent" id="progress-percent">0%</div>
         </div>
       </div>
+    </section>
+
+    <section id="output-section">
+      <div class="output-header">
+        <div>
+          <div class="output-label">YOUR ROADMAP</div>
+          <div class="output-topic" id="output-topic"></div>
+        </div>
+        <div class="output-actions">
+          <button class="btn" onclick="copyShareLink()">Share ↗</button>
+          <button class="btn" onclick="downloadPDF()">Export PDF</button>
+        </div>
+      </div>
+      <div id="overall-progress-container" style="display: none;">
+        <div class="overall-progress-label">
+          <span>Overall Progress</span>
+          <span class="overall-progress-percent" id="overall-progress-percent">0%</span>
+        </div>
+        <div class="progress-container">
+          <div class="progress-bar" id="overall-progress-bar"></div>
+        </div>
+      </div>
+      <div class="phases" id="phases-container"></div>
+      <div id="roadmap-diagram"></div>
+    </section>
+
+    <section id="history-section">
+      <div class="history-grid" id="history-grid"></div>
+    </section>
+
+    <div class="footer">
+      Powered by Pathfinder &bull; &copy; 2026
     </div>
-  </section>
+  </main>
 
-  <section id="output-section">
-    <div class="output-header">
-      <div>
-        <div class="output-label">YOUR ROADMAP</div>
-        <div class="output-topic" id="output-topic"></div>
-      </div>
-      <div class="output-actions">
-        <button class="btn" onclick="copyShareLink()">Share ↗</button>
-        <button class="btn" onclick="downloadPDF()">Export PDF</button>
-      </div>
-    </div>
-    <div id="overall-progress-container" style="display: none;">
-      <div class="overall-progress-label">
-        <span>Overall Progress</span>
-        <span class="overall-progress-percent" id="overall-progress-percent">0%</span>
-      </div>
-      <div class="progress-container">
-        <div class="progress-bar" id="overall-progress-bar"></div>
-      </div>
-    </div>
-    <div class="phases" id="phases-container"></div>
-    <div id="roadmap-diagram"></div>
-  </section>
+  <div class="toast" id="toast"></div>
 
-  <section id="history-section">
-    <div class="history-title">Your Roadmaps</div>
-    <div class="history-grid" id="history-grid"></div>
-  </section>
-
-  <div class="footer">
-    Powered by Pathfinder &bull; &copy; 2026
-  </div>
-</main>
-
-<div class="toast" id="toast"></div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>

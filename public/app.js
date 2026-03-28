@@ -6,11 +6,11 @@ const CONFIG = {
 
 // Diagram configuration
 const DIAGRAM_CONFIG = {
-  phaseGap: 300,
-  taskGap: 140,
-  horizontalOffset: 450,
+  phaseGap: 600,
+  taskGap: 450,   /* Significantly increased for clear mind map */
+  horizontalOffset: 550,
   nodeWidth: 320,
-  taskNodeWidth: 360,
+  taskNodeWidth: 420,
   phaseHeight: 80,
   topicHeight: 60,
   topicY: 100
@@ -134,10 +134,37 @@ function renderRoadmapDiagram(topic, roadmap) {
 
     phases.forEach((phase, phaseIdx) => {
       const tasks = phase.tasks || [];
-      const phaseTaskHeight = Math.max(0, (tasks.length - 1) * DIAGRAM_CONFIG.taskGap);
       const phaseX = centerX;
-      const phaseY = currentY + (phaseTaskHeight / 2);
       
+      // Recursive Height Calculation (Compact)
+      const getNodeHeight = (nodeId, meta) => {
+        let h = 220; // Base task height
+        if (meta && meta.expanded && meta.subRoadmap) {
+          const subTasks = meta.subRoadmap.phases?.[0]?.tasks || [];
+          subTasks.forEach((st, stIdx) => {
+            const subId = `${nodeId}.s${stIdx}`;
+            const subMeta = currentRoadmap.nodeMeta?.[subId];
+            h += getNodeHeight(subId, subMeta) * 0.45; // Significantly more compact
+          });
+          h += 50; 
+        }
+        return h;
+      };
+
+      let phaseInternalY = 0;
+      const taskPlacements = tasks.map((task, tIdx) => {
+        const nodeId = `${phaseIdx}-${tIdx}`;
+        const meta = currentRoadmap.nodeMeta?.[nodeId] || {};
+        const taskHeight = getNodeHeight(nodeId, meta);
+        const placement = { task, tIdx, nodeId, meta, taskHeight, relativeY: phaseInternalY };
+        phaseInternalY += taskHeight;
+        return placement;
+      });
+
+      const phaseTotalHeight = phaseInternalY;
+      const phaseY = currentY + (phaseTotalHeight / 2) - 100;
+
+      // Render Phase Header
       const phaseNode = createNode(
         `<div><div class="node-title">${escHtml(phase.title)}</div><div class="node-meta">${escHtml(phase.duration || "")}</div></div>`,
         `node-phase node-p${phaseIdx % 4}`,
@@ -146,37 +173,80 @@ function renderRoadmapDiagram(topic, roadmap) {
       container.appendChild(phaseNode);
       drawConnection(svg, prevPhasePoint, { x: phaseX, y: phaseY - DIAGRAM_CONFIG.phaseHeight / 2 }, "spine");
       
-      const phaseCenterRight = { x: phaseX + DIAGRAM_CONFIG.nodeWidth / 2, y: phaseY };
-      const phaseCenterLeft = { x: phaseX - DIAGRAM_CONFIG.nodeWidth / 2, y: phaseY };
       const side = (phaseIdx % 2 === 0) ? 1 : -1; 
       
-      tasks.forEach((task, taskIdx) => {
+      const renderNodesRecursive = (items, parentX, parentY, parentNodeId, level, s) => {
+        let currentLevelY = parentY - (items.length * 40); // Tighter base
+
+        items.forEach((item, idx) => {
+          const nodeId = `${parentNodeId}.s${idx}`;
+          const meta = currentRoadmap.nodeMeta?.[nodeId] || {};
+          const isDone = !!meta.completedAt;
+          
+          const nodeX = parentX + (200 * s); // Closer horizontally
+          const nodeY = currentLevelY + 80;
+          
+          const content = `
+            <div class="sub-task ${isDone ? 'done' : ''}">
+               <div class="sub-task-text">${escHtml(item)}</div>
+               <div class="sub-task-footer">
+                  <span class="sub-dive-btn" onclick="event.stopPropagation(); recursiveDeepDive('${nodeId}', ${escAttr(item)})">
+                    ${meta.subRoadmap ? (meta.expanded ? '−' : '+') : '+ Detail'}
+                  </span>
+               </div>
+            </div>
+          `;
+          
+          const subNode = createNode(content, `node-sub-task level-${level}`, nodeX, nodeY);
+          subNode.onclick = () => recursiveDeepDive(nodeId, item);
+          container.appendChild(subNode);
+          
+          drawConnection(svg, {x: parentX, y: parentY + 20}, {x: nodeX, y: nodeY}, "sub");
+          
+          if (meta.expanded && meta.subRoadmap) {
+             const nestedTasks = meta.subRoadmap.phases?.[0]?.tasks || [];
+             renderNodesRecursive(nestedTasks, nodeX, nodeY, nodeId, level + 1, s);
+             currentLevelY += (nestedTasks.length * 80);
+          }
+          currentLevelY += 100; // Tighter vertical gaps
+        });
+      };
+
+      taskPlacements.forEach((p) => {
         const taskX = phaseX + (DIAGRAM_CONFIG.horizontalOffset * side);
-        const taskY = phaseY + (taskIdx - (tasks.length - 1) / 2) * DIAGRAM_CONFIG.taskGap;
-        const nodeId = `${phaseIdx}-${taskIdx}`;
-        const meta = currentRoadmap.nodeMeta?.[nodeId] || {};
-        const isDone = !!meta.completedAt;
+        const taskY = (phaseY - phaseTotalHeight / 2) + p.relativeY + 110;
+        const isDone = !!p.meta.completedAt;
 
         const taskContent = `
-          <div class="task ${isDone ? 'done' : ''}" data-phase="${phaseIdx}" data-task="${taskIdx}">
+          <div class="task ${isDone ? 'done' : ''}" data-node-id="${p.nodeId}">
             ${isDone ? '<div class="node-done-badge">LEARNED</div>' : ''}
             <div class="task-handle">≡</div>
-            <span class="task-text">${escHtml(task)}</span>
-            <div class="task-actions"><span class="task-btn">Studio →</span></div>
+            <div class="task-body">
+               <span class="task-text">${escHtml(p.task)}</span>
+            </div>
+            <div class="task-footer">
+              <button class="dive-action-btn" onclick="event.stopPropagation(); recursiveDeepDive('${p.nodeId}', ${escAttr(p.task)})">
+                ${p.meta.subRoadmap ? (p.meta.expanded ? 'Collapse' : 'Expand') : 'Deep Dive +'}
+              </button>
+              <span class="task-btn" onclick="event.stopPropagation(); openTaskWorkspace('${p.nodeId}', ${escAttr(p.task)})">Studio →</span>
+            </div>
           </div>
         `;
 
         const taskNode = createNode(taskContent, `node-task node-p${phaseIdx % 4} ${isDone ? 'done' : ''}`, taskX, taskY);
-        taskNode.onclick = () => openTaskWorkspace(phaseIdx, taskIdx, task);
+        taskNode.onclick = () => recursiveDeepDive(p.nodeId, p.task);
         container.appendChild(taskNode);
         
-        const startPoint = (side === 1) ? phaseCenterRight : phaseCenterLeft;
-        const endPoint = { x: taskX - (DIAGRAM_CONFIG.taskNodeWidth / 2) * side, y: taskY };
-        drawConnection(svg, startPoint, endPoint, "dotted");
+        drawConnection(svg, {x: phaseX, y: phaseY}, { x: taskX - (DIAGRAM_CONFIG.taskNodeWidth / 2) * side, y: taskY }, "dotted");
+
+        if (p.meta.expanded && p.meta.subRoadmap) {
+          const subTasks = p.meta.subRoadmap.phases?.[0]?.tasks || [];
+          renderNodesRecursive(subTasks, taskX, taskY, p.nodeId, 1, side);
+        }
       });
 
       prevPhasePoint = { x: phaseX, y: phaseY + DIAGRAM_CONFIG.phaseHeight / 2 };
-      currentY += Math.max(DIAGRAM_CONFIG.phaseGap, phaseTaskHeight + 150);
+      currentY += Math.max(800, phaseTotalHeight + 400); 
     });
     container.style.minHeight = (currentY + 100) + "px";
   };
@@ -189,10 +259,9 @@ function renderRoadmapDiagram(topic, roadmap) {
 // ─── Studio Workspace ─────────────────────────────────────────────────────────
 let activeWorkspaceNode = null;
 
-function openTaskWorkspace(phaseIdx, taskIdx, taskTitle) {
+function openTaskWorkspace(nodeId, taskTitle) {
   if (!currentRoadmap.nodeMeta) currentRoadmap.nodeMeta = {};
-  activeWorkspaceNode = { phaseIdx, taskIdx, title: taskTitle };
-  const nodeId = `${phaseIdx}-${taskIdx}`;
+  activeWorkspaceNode = { nodeId, title: taskTitle };
   
   if (!currentRoadmap.nodeMeta[nodeId]) {
     currentRoadmap.nodeMeta[nodeId] = { customLinks: [], completedAt: null };
@@ -203,6 +272,8 @@ function openTaskWorkspace(phaseIdx, taskIdx, taskTitle) {
   document.getElementById("task-workspace").classList.add("open");
 
   const btn = document.getElementById("mark-done-btn");
+  btn.onclick = () => toggleTaskCompletion(nodeId);
+
   const ts = document.getElementById("workspace-timestamp");
   if (meta.completedAt) {
     btn.textContent = "Mark as Unlearned";
@@ -224,7 +295,7 @@ function openTaskWorkspace(phaseIdx, taskIdx, taskTitle) {
   ];
   aiList.innerHTML = resources.map(r => `
     <a href="${r.url}" target="_blank" class="resource-link">
-      <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--secondary); margin-bottom: 4px;">${r.title}</div>
+      <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--accent); margin-bottom: 4px;">${r.title}</div>
       <div style="font-size: 13px; font-weight: 600;">Explore ${r.desc}</div>
     </a>
   `).join("");
@@ -237,15 +308,54 @@ function closeTaskWorkspace() {
   activeWorkspaceNode = null;
 }
 
-async function toggleTaskCompletion() {
-  if (!activeWorkspaceNode) return;
-  const nodeId = `${activeWorkspaceNode.phaseIdx}-${activeWorkspaceNode.taskIdx}`;
+async function recursiveDeepDive(nodeId, title) {
+  if (!currentRoadmap.nodeMeta) currentRoadmap.nodeMeta = {};
+  if (!currentRoadmap.nodeMeta[nodeId]) {
+    currentRoadmap.nodeMeta[nodeId] = { customLinks: [], completedAt: null, expanded: false };
+  }
+  
+  const meta = currentRoadmap.nodeMeta[nodeId];
+  
+  if (meta.subRoadmap) {
+    showToast(meta.expanded ? "Collapsing..." : "Expanding...");
+    meta.expanded = !meta.expanded;
+    renderRoadmapDiagram(currentTopic, currentRoadmap);
+    return;
+  }
+
+  showLoading(true);
+  try {
+    const res = await fetch("/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        prompt: `Create a detailed technical sub-roadmap for the specific sub-topic: "${title}". This is a nested node. Provide 3 specific learning tasks.`,
+        model: "nvidia"
+      }),
+    });
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content ?? "";
+    const subRoadmap = parseRoadmap(text);
+    
+    meta.subRoadmap = subRoadmap;
+    meta.expanded = true;
+    
+    await saveRoadmap(currentTopic, currentRoadmap);
+    renderRoadmapDiagram(currentTopic, currentRoadmap);
+    showToast("Deep dive deeper!");
+  } catch (err) {
+    showError("Could not dive deeper at this time.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function toggleTaskCompletion(nodeId) {
   const meta = currentRoadmap.nodeMeta[nodeId];
   meta.completedAt = meta.completedAt ? null : new Date().toISOString();
   
   await saveRoadmap(currentTopic, currentRoadmap);
   renderRoadmapDiagram(currentTopic, currentRoadmap);
-  openTaskWorkspace(activeWorkspaceNode.phaseIdx, activeWorkspaceNode.taskIdx, activeWorkspaceNode.title);
   updateOverallProgress();
 }
 
@@ -344,6 +454,11 @@ function renderSidebar() {
   container.appendChild(sidebar);
 }
 
+function triggerDeepDive(phaseIdx, taskIdx, title) {
+  activeWorkspaceNode = { phaseIdx, taskIdx, title };
+  deepDive();
+}
+
 function escHtml(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -352,8 +467,47 @@ function escAttr(str) {
   return "'" + String(str).replace(/'/g, "&#39;") + "'";
 }
 
+let progressInterval = null;
+
 function showLoading(on) {
-  document.getElementById("loading").style.display = on ? "block" : "none";
+  const loadingEl = document.getElementById("loading");
+  const progressBar = document.getElementById("progress-bar");
+  const progressPercent = document.getElementById("progress-percent");
+  const loadingText = document.getElementById("loading-text");
+
+  if (on) {
+    loadingEl.style.display = "block";
+    let progress = 0;
+    if (progressBar) progressBar.style.width = "0%";
+    if (progressPercent) progressPercent.textContent = "0%";
+    
+    const stages = [
+      { p: 20, t: "Connecting to AI..." },
+      { p: 40, t: "Analyzing topic..." },
+      { p: 60, t: "Structuring phases..." },
+      { p: 80, t: "Polishing nodes..." }
+    ];
+    let stageIdx = 0;
+
+    progressInterval = setInterval(() => {
+      if (progress < 90) {
+        progress += Math.random() * 2;
+        if (stageIdx < stages.length && progress >= stages[stageIdx].p) {
+          loadingText.textContent = stages[stageIdx].t;
+          stageIdx++;
+        }
+        if (progressBar) progressBar.style.width = progress + "%";
+        if (progressPercent) progressPercent.textContent = Math.round(progress) + "%";
+      }
+    }, 150);
+  } else {
+    clearInterval(progressInterval);
+    if (progressBar) progressBar.style.width = "100%";
+    if (progressPercent) progressPercent.textContent = "100%";
+    setTimeout(() => {
+      loadingEl.style.display = "none";
+    }, 500);
+  }
 }
 
 function showError(msg) {
@@ -405,3 +559,8 @@ function toggleHistory() {
   s.style.display = s.style.display === "block" ? "none" : "block";
   if (s.style.display === "block") loadHistory();
 }
+
+// Allow Enter key to generate
+document.getElementById("topic").addEventListener("keydown", e => {
+  if (e.key === "Enter") generate();
+});
